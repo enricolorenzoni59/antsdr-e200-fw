@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "status": "EXPERIMENTAL",
+  "integration": {
+    "repo": "https://github.com/analogdevicesinc/plutosdr-fw.git",
+    "commit": "3b689562bfef2e9312a18cf3dba093c1fc00bc72"
+  },
+  "components": {
+    "br2-external": {
+      "repo": "https://github.com/analogdevicesinc/br2-external.git",
+      "commit": "46fb2fa54870cbddd0e5a6a26548c410723b0815"
+    },
+    "buildroot": {
+      "repo": "https://github.com/analogdevicesinc/buildroot.git",
+      "commit": "2e2994de5213abfa63ab5cf5f9291bf62b53d094"
+    },
+    "hdl": {
+      "repo": "https://github.com/analogdevicesinc/hdl.git",
+      "commit": "4840c81f2af172b036cb3ccb3f9f2dc45ed9c1d3"
+    },
+    "linux": {
+      "repo": "https://github.com/analogdevicesinc/linux.git",
+      "commit": "bf1d49f17fa9e15bc40be2615ef67cdf023f660a"
+    },
+    "u-boot": {
+      "repo": "https://github.com/analogdevicesinc/u-boot.git",
+      "commit": "b234cb3ae435f30c7d85ab589193fc9b93c7586d"
+    }
+  },
+  "required_vivado_version": "2025.1",
+  "hardware_validated": false,
+  "note": "Matched ADI development integration, not a released or E200-validated stable stack. Initial kernel trial retains baseline rootfs and official vendor FPGA.",
+  "libiio": {
+    "repo": "https://github.com/analogdevicesinc/libiio.git",
+    "commit": "da72b6193911e8fc242422bea5bef90e23c3577d"
+  },
+  "toolchain": {
+    "family": "Arm GNU Toolchain",
+    "version": "14.2.rel1",
+    "archive_sha256": "32301a5a33aab47810837cdab848a5a513ca22804d3168d3ada5833828b07912"
+  }
+}

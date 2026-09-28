@@ -1,0 +1,59 @@
+--- a/iiod/ops.c
++++ b/iiod/ops.c
+@@ -22,6 +22,7 @@
+ #include "ops.h"
+ #include "e200-affinity.h"
+ #include "e200-legacy-prefetch.h"
++#include "e200-rx-layout.h"
+ #include "parser.h"
+ #include "thread-pool.h"
+ 
+@@ -476,6 +477,7 @@
+ 		if (entry->update_mask) {
+ 			unsigned int i;
+ 			unsigned int samples_count = 0;
++			unsigned int e200_frames;
+ 
+ 			free_buf_and_blocks(entry);
+ 
+@@ -497,16 +499,17 @@
+ 					samples_count = thd->samples_count;
+ 			}
+ 
++			e200_frames = e200_rx_block_frames(dev, entry->mask);
++
+ 			/* Keep legacy READBUF framing; aggregate large requests from
+-			 * bounded DMA blocks using the existing rw loop. RX1 only. */
++			 * 1 MiB DMA blocks using the existing rw loop. Checked RX layouts. */
+ 			if (getenv("E200_LEGACY_AGGREGATE") &&
+ 			    !strcmp(getenv("E200_LEGACY_AGGREGATE"), "1") &&
+ 			    !is_output && iio_device_get_name(dev) &&
+ 			    !strcmp(iio_device_get_name(dev), "cf-ad9361-lpc") &&
+-			    iio_device_get_sample_size(dev, entry->mask) == 4 &&
+-			    samples_count > 262144) {
+-				IIO_INFO("E200 aggregate: %u samples in 262144-sample DMA blocks\n", samples_count);
+-				samples_count = 262144;
++			    e200_frames && samples_count > e200_frames) {
++				IIO_INFO("E200 aggregate: %u samples in %u-frame DMA blocks\n", samples_count, e200_frames);
++				samples_count = e200_frames;
+ 			}
+ 
+ 			ret = create_buf_and_blocks(entry, samples_count, entry->mask);
+@@ -545,15 +548,14 @@
+ 			    !SLIST_NEXT(thd, dev_list_entry) &&
+ 			    iio_device_get_name(dev) &&
+ 			    !strcmp(iio_device_get_name(dev), "cf-ad9361-lpc") &&
+-			    iio_device_get_sample_size(dev, entry->mask) == 4 &&
+-			    samples_count == 262144 && entry->nb_blocks >= 2 && entry->nb_blocks <= 32) {
++			    e200_frames && samples_count == e200_frames && entry->nb_blocks >= 2 && entry->nb_blocks <= 32) {
+ 				entry->e200_legacy = e200_legacy_open(entry->buf_stream, entry->blocks, entry->nb_blocks);
+ 				if (!entry->e200_legacy) { ret = -errno; break; }
+ 				if (getenv("E200_LEGACY_ASYNC") && !strcmp(getenv("E200_LEGACY_ASYNC"), "1")) {
+ 					ret = e200_legacy_bind(entry->e200_legacy, thd->pdata->e200_zc);
+ 					if (ret) break;
+ 				}
+-				IIO_INFO("E200 legacy upstream-task prefetch enabled\n");
++				IIO_INFO("E200 legacy upstream-task prefetch enabled: %u frames, 1048576 bytes\n", e200_frames);
+ 			}
+ 
+ 			/* Signal the threads that we opened the device */

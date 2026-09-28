@@ -1,0 +1,18 @@
+From: E200 firmware contributors
+Subject: [PATCH] package/libad9361-iio: hash the license collected by legal-info
+
+Original source: ADI br2-external 46fb2fa54870cbddd0e5a6a26548c410723b0815
+Purpose: legal-info reports ERROR: No hash found for LICENSE without this entry.
+Hardware function affected: none; package license integrity only.
+Upstream status: local fix, not submitted.
+Reason local: required for verifiable license collection of the pinned ADI package.
+
+diff --git a/package/libad9361-iio/libad9361-iio.hash b/package/libad9361-iio/libad9361-iio.hash
+index e857142..6c2eb05 100644
+--- a/package/libad9361-iio/libad9361-iio.hash
++++ b/package/libad9361-iio/libad9361-iio.hash
+@@ -1 +1,4 @@
+ sha256	f4976a1317a0b7cf84727d068be5a52c070539ca7301f0160b0677a429538d87  libad9361-iio-0.4.0.tar.gz
++
++# License from the hash-verified v0.4.0 source archive.
++sha256  5525fbd0911b8dcbdc6f0c081ac27fd55b75d6d261c62fa05b9bdc0b72b481f6  LICENSE

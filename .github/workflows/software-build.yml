@@ -1,0 +1,29 @@
+name: Complete SD build (manual)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    # Requires an explicitly provisioned Linux x86-64 builder with >=70 GiB free.
+    runs-on: [self-hosted, linux, x64, e200-build]
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Build selected candidate from public sources
+        shell: bash
+        run: |
+          set -o pipefail
+          E200_JOBS=2 ./build.sh 2>&1 | tee build.log
+      - name: Preserve diagnostics and manifests (no firmware binaries)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: build-evidence
+          retention-days: 14
+          path: |
+            build.log
+            work/release/evidence/
+            work/release/package/build-manifest.json
+            work/release/package/sd/manifest.json
+            work/release/package/sd/SHA256SUMS

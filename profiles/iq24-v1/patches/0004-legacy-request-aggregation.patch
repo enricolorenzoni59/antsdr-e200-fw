@@ -1,0 +1,21 @@
+--- a/iiod/ops.c
++++ b/iiod/ops.c
+@@ -462,6 +462,18 @@
+ 
+ 				if (thd->samples_count > samples_count)
+ 					samples_count = thd->samples_count;
++			}
++
++			/* Keep legacy READBUF framing; aggregate large requests from
++			 * bounded DMA blocks using the existing rw loop. RX1 only. */
++			if (getenv("E200_LEGACY_AGGREGATE") &&
++			    !strcmp(getenv("E200_LEGACY_AGGREGATE"), "1") &&
++			    !is_output && iio_device_get_name(dev) &&
++			    !strcmp(iio_device_get_name(dev), "cf-ad9361-lpc") &&
++			    iio_device_get_sample_size(dev, entry->mask) == 4 &&
++			    samples_count > 262144) {
++				IIO_INFO("E200 aggregate: %u samples in 262144-sample DMA blocks\n", samples_count);
++				samples_count = 262144;
+ 			}
+ 
+ 			ret = create_buf_and_blocks(entry, samples_count, entry->mask);

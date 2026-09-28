@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""Read platform health without changing RF or persistent storage."""
+import argparse
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+
+
+def read(path):
+    try:
+        return Path(path).read_text().strip()
+    except OSError:
+        return None
+
+
+def telemetry():
+    temperatures = []
+    for zone in sorted(Path('/sys/class/thermal').glob('thermal_zone*')):
+        value = read(zone / 'temp')
+        if value is not None:
+            temperatures.append({'sensor': read(zone / 'type'), 'celsius': float(value) / 1000})
+    devices = []
+    for dev in sorted(Path('/sys/bus/iio/devices').glob('iio:device*')):
+        name = read(dev / 'name')
+        devices.append({'id': dev.name, 'name': name})
+        for value_file in sorted(dev.glob('in_temp*_input')):
+            value = read(value_file)
+            if value is not None:
+                temperatures.append({'sensor': f'{name}/{value_file.name}', 'celsius': float(value) / 1000})
+        for raw in sorted(dev.glob('in_temp*_raw')):
+            base = str(raw)[:-4]
+            value, scale = read(raw), read(base + '_scale')
+            offset = read(base + '_offset') or '0'
+            if value is not None and scale is not None:
+                temperatures.append({'sensor': f'{name}/{raw.name}',
+                                     'celsius': (float(value) + float(offset)) * float(scale) / 1000})
+    memory = {}
+    for line in (read('/proc/meminfo') or '').splitlines():
+        key, value = line.split(':', 1)
+        memory[key] = int(value.split()[0])
+    net = Path('/sys/class/net/eth0')
+    return {'schema_version': 1, 'timestamp': datetime.now(timezone.utc).isoformat(),
+            'uptime_seconds': float((read('/proc/uptime') or '0').split()[0]),
+            'load_average': [float(x) for x in (read('/proc/loadavg') or '0 0 0').split()[:3]],
+            'memory_used_mb': (memory.get('MemTotal', 0) - memory.get('MemAvailable', 0)) / 1024,
+            'temperatures': temperatures, 'iio_devices': devices,
+            'ethernet': {name: read(net / name) for name in ('operstate', 'carrier', 'speed', 'duplex')},
+            'ethernet_counters': {name: int(read(net / 'statistics' / name) or 0)
+                                  for name in ('rx_bytes', 'tx_bytes', 'rx_errors', 'tx_errors', 'rx_dropped', 'tx_dropped')}}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--json', action='store_true', help='JSON is the default output format')
+    args = parser.parse_args()
+    print(json.dumps(telemetry(), indent=2))
+
+
+if __name__ == '__main__':
+    main()

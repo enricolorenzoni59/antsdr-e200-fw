@@ -1,0 +1,3 @@
+# Serial console is the provisioning path. SSH requires an authorized public key.
+# No password authentication or TCP forwarding on the base firmware.
+DROPBEAR_ARGS="-s -j -k"

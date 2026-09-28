@@ -1,0 +1,39 @@
+name: Host and transport checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Check build entrypoint and credentials
+        run: |
+          bash -n build.sh
+          ./build.sh --help
+          curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz -o /tmp/gitleaks.tar.gz
+          echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          git archive HEAD | tar -x -C "$(mkdir /tmp/public-scan && echo /tmp/public-scan)"
+          /tmp/gitleaks dir --redact --no-banner --config .gitleaks.toml /tmp/public-scan
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pytest cmake libxml2-dev libzstd-dev bison flex
+      - name: Prepare pinned test sources
+        run: |
+          python3 scripts/build/prepare-transport-tests.py
+      - name: Python regressions
+        run: python3 -m pytest tests/host -q
+      - name: Native transport and lifetime sanitizers
+        run: sh tests/host/run-libiio1-transport.sh "$PWD/work/transport/libiio1-source"
+      - name: RX layout and zero-copy pipeline
+        run: |
+          cc -std=gnu11 -Wall -Wextra -Werror -Iwork/transport/libiio1-source/include tests/host/test_e200_rx_layout.c -o /tmp/layout
+          /tmp/layout
+          cc -O2 -Wall -Wextra -Werror -pthread tests/host/test_tcp_pipeline.c tests/rf/tcp-pipeline.c tests/rf/tcp-transport.c -o /tmp/pipeline
+          /tmp/pipeline

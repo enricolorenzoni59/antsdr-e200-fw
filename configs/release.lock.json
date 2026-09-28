@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "profile": "e200-single-rx",
+  "target_version": "0.1.0-rc1",
+  "status": "developer-preview",
+  "kernel": {
+    "version": "6.12.111",
+    "compiler": "GCC 15",
+    "source_lock": "modernization.lock.json",
+    "patch_series": "patches/linux/series",
+    "rx_patch": "patches/experimental/0001-iio-page-backed-rx.patch"
+  },
+  "userspace": {
+    "buildroot": "2026.08",
+    "compiler": "Arm GNU 14.2.rel1",
+    "profile": "iq24-bash",
+    "source_lock": "modernization.lock.json"
+  },
+  "iiod": {
+    "version": "1.0.0",
+    "patches": "profiles/iq24-v1/patches",
+    "runtime": "profiles/iq24-consolidated/iiod.default",
+    "original_026_retained": true
+  },
+  "boot": {
+    "source_lock": "vendor-v039-artifacts.json",
+    "member": "build_sdimg/BOOT.bin",
+    "sha256": "d3b30bc1bdda7872d05b976e7ec2841a40287a85272003bee1bf7d4fdae8ccb0",
+    "physical_qualification": "pending"
+  },
+  "rx": {
+    "receivers": 1,
+    "rate": 24000000,
+    "format": "I16/Q16",
+    "native_request_samples": 262144,
+    "legacy_request_samples": 2097152,
+    "kernel_buffers": 32
+  },
+  "out_of_scope": [
+    "TX",
+    "dual RX qualification",
+    "QSPI programming",
+    "new U-Boot",
+    "FPGA DSP",
+    "IQ12 packing",
+    "web spectrum"
+  ],
+  "historical_source_commit": "e819c34a87655d2ea61675e95175ad1680271538"
+}

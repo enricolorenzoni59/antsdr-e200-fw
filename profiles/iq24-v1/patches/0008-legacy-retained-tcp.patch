@@ -1,0 +1,50 @@
+--- a/iiod/ops.c
++++ b/iiod/ops.c
+@@ -266,6 +266,8 @@
+ 	if (!demux) {
+ 		/* Short path */
+ 		start = iio_block_start(block);
++		if (e200_legacy_owns(dev->e200_legacy, pdata->e200_zc))
++			return write_all(pdata, start, len);
+ 		if (pdata->e200_zc) {
+ 			int err = e200_zc_register(pdata->e200_zc, start, len, false);
+ 			if (err)
+@@ -534,6 +536,10 @@
+ 			    samples_count == 262144 && entry->nb_blocks >= 2 && entry->nb_blocks <= 32) {
+ 				entry->e200_legacy = e200_legacy_open(entry->buf_stream, entry->blocks, entry->nb_blocks);
+ 				if (!entry->e200_legacy) { ret = -errno; break; }
++				if (getenv("E200_LEGACY_ASYNC") && !strcmp(getenv("E200_LEGACY_ASYNC"), "1")) {
++					ret = e200_legacy_bind(entry->e200_legacy, thd->pdata->e200_zc);
++					if (ret) break;
++				}
+ 				IIO_INFO("E200 legacy upstream-task prefetch enabled\n");
+ 			}
+ 
+@@ -862,6 +868,10 @@
+ 
+ 	pthread_mutex_lock(&entry->thdlist_lock);
+ 	if (!entry->closed) {
++		/* Join retained-buffer workers before this client's parser transport
++		 * can be destroyed. The rw thread owns final helper destruction. */
++		if (e200_legacy_owns(entry->e200_legacy, t->pdata->e200_zc))
++			e200_legacy_stop(entry->e200_legacy);
+ 		entry->update_mask = true;
+ 		SLIST_REMOVE(&entry->thdlist_head, t, ThdEntry, dev_list_entry);
+ 		if (SLIST_EMPTY(&entry->thdlist_head) && entry->buf_stream) {
+@@ -1580,6 +1590,16 @@
+ 				return 0;
+ 			}
+ 
++			/* Zero-copy completions wake POLLERR without a new command.
++			 * Drain the shared ledger; never feed EAGAIN to the lexer. */
++			if (pfd[0].revents & POLLERR) {
++				int err = pdata->e200_zc ? e200_zc_reap(pdata->e200_zc) : -EIO;
++				if (err)
++					return err;
++			}
++			if (!(pfd[0].revents & POLLIN))
++				continue;
++
+ 			/* First read from the socket, without advancing the
+ 			 * read offset */
+ 			ret = recv(pdata->fd_in, buf, len, MSG_NOSIGNAL | MSG_PEEK);

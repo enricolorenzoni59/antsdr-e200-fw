@@ -1,0 +1,64 @@
+--- a/iiod/responder.c
++++ b/iiod/responder.c
+@@ -18,6 +18,7 @@
+ #include "debug.h"
+ #include "iio/iio.h"
+ #include "ops.h"
++#include "e200-affinity.h"
+ 
+ #define IIO_ARRAY_SIZE(x) (sizeof(x) ? sizeof(x) / sizeof((x)[0]) : 0)
+ 
+@@ -361,6 +362,10 @@
+ 	struct block_entry *entry = d;
+ 	intptr_t ret;
+ 
++	ret = e200_pin("E200_DMA_CPU");
++	if (ret)
++		goto out_send_response;
++
+ 	ret = iio_block_enqueue(entry->block, (size_t)entry->bytes_used, entry->cyclic);
+ 	if (ret) {
+ 		/* Shift the error code by 16 bits to the left. This notifies
+@@ -391,6 +396,10 @@
+ 	struct iiod_buf data;
+ 	unsigned int nb_data = 0;
+ 	intptr_t ret;
++
++	ret = e200_pin("E200_DMA_CPU");
++	if (ret)
++		goto out_send_response;
+ 
+ 	ret = iio_block_dequeue(entry->block, false);
+ 	if (ret < 0)
+@@ -1281,6 +1290,9 @@
+ 
+ static ssize_t iiod_write(void *d, const struct iiod_buf *buf, size_t nb)
+ {
++	int ret = e200_pin("E200_NET_CPU");
++	if (ret)
++		return ret;
+ 	return write_all(d, buf->ptr, buf->size);
+ }
+ 
+--- a/iiod/ops.c
++++ b/iiod/ops.c
+@@ -20,6 +20,7 @@
+ #include "debug.h"
+ #include "iio/iio.h"
+ #include "ops.h"
++#include "e200-affinity.h"
+ #include "parser.h"
+ #include "thread-pool.h"
+ 
+@@ -427,6 +428,11 @@
+ 	struct iio_buffer *buf0 = iio_device_get_buffer(dev, 0);
+ 	bool is_output = buf0 && iio_buffer_is_output(buf0);
+ 	ssize_t nb_bytes, ret = 0;
++
++	ret = e200_pin("E200_LEGACY_CPU");
++	if (ret) {
++		IIO_ERROR("E200 legacy affinity failed: %zd\n", ret);
++	}
+ 
+ 	IIO_DEBUG("R/W thread started for device %s\n", dev_label_or_name_or_id(dev));
+ 

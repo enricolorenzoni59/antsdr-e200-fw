@@ -1,0 +1,869 @@
+From: E200 Community Firmware <community@example.invalid>
+Subject: [EXPERIMENTAL] iiod: opt-in E200 RX DMA prefetch and TCP zero-copy
+
+Source: libiio da72b6193911e8fc242422bea5bef90e23c3577d (0.26)
+This independent profile retains the standard network protocol. E200_IQ24=1
+selects a single RX client, 32 1-MiB DMA blocks and CPU0/CPU1 overlap. RX1
+requests >=262144 complex samples use the fast path; smaller requests retain
+the normal libiio implementation. No TX behavior is added or validated.
+Requires the separate experimental page-backed kernel allocator.
+Not submitted upstream; not a general-purpose libiio optimization.
+
+--- a/iiod/ops.c
++++ b/iiod/ops.c
+@@ -7,6 +7,7 @@
+  */
+ 
+ #include "ops.h"
++#include "e200-rx.h"
+ #include "parser.h"
+ #include "thread-pool.h"
+ #include "../debug.h"
+@@ -26,6 +27,13 @@
+ 
+ struct DevEntry;
+ 
++static bool e200_profile_device(const struct iio_device *dev)
++{
++    const char *enabled = getenv("E200_IQ24");
++    const char *name = iio_device_get_name(dev);
++    return enabled && !strcmp(enabled, "1") && name && !strcmp(name, "cf-ad9361-lpc");
++}
++
+ /* Corresponds to a thread reading from a device */
+ struct ThdEntry {
+ 	SLIST_ENTRY(ThdEntry) parser_list_entry;
+@@ -64,7 +72,7 @@
+ 
+ 	pfd[0].fd = thd->eventfd;
+ 	pfd[0].events = POLLIN;
+-	pfd[1].fd = fd_in;
++	pfd[1].fd = thd->pdata->e200_rx ? -1 : fd_in;
+ 	pfd[1].events = POLLRDHUP;
+ 	pfd[2].fd = thread_pool_get_poll_fd(thd->pdata->pool);
+ 	pfd[2].events = POLLIN;
+@@ -93,6 +101,8 @@
+ 
+ 	struct iio_device *dev;
+ 	struct iio_buffer *buf;
++	struct e200_rx *e200_rx;
++
+ 	unsigned int sample_size, nb_clients;
+ 	unsigned int samples_count;
+ 	bool update_mask;
+@@ -266,8 +276,10 @@
+ 		/* Got STOP event, or client closed the socket: treat it as EOF */
+ 		if (pfd[1].revents & POLLIN || pfd[0].revents & POLLRDHUP)
+ 			return 0;
+-		if (pfd[0].revents & POLLERR)
+-			return -EIO;
++		if (pfd[0].revents & POLLERR) {
++            int error = pdata->e200_rx ? e200_rx_reap(pdata->e200_rx) : -EIO;
++            if (error) return error;
++        }
+ 		if (!(pfd[0].revents & POLLIN))
+ 			continue;
+ 
+@@ -306,8 +318,10 @@
+ 		/* Got STOP event, or client closed the socket: treat it as EOF */
+ 		if (pfd[1].revents & POLLIN || pfd[0].revents & POLLHUP)
+ 			return 0;
+-		if (pfd[0].revents & POLLERR)
+-			return -EIO;
++		if (pfd[0].revents & POLLERR) {
++            int error = pdata->e200_rx ? e200_rx_reap(pdata->e200_rx) : -EIO;
++            if (error) return error;
++        }
+ 		if (!(pfd[0].revents & POLLOUT))
+ 			continue;
+ 
+@@ -480,6 +494,8 @@
+ 
+ 	if (!demux) {
+ 		/* Short path */
++		if (dev->e200_rx)
++			return e200_rx_send(dev->e200_rx, len);
+ 		start = iio_buffer_start(dev->buf);
+ 		return write_all(pdata, start, len);
+ 	} else {
+@@ -589,6 +605,10 @@
+ 					samples_count = thd->samples_count;
+ 			}
+ 
++            SLIST_FOREACH(thd, &entry->thdlist_head, dev_list_entry)
++                thd->pdata->e200_rx = NULL;
++			e200_rx_close(entry->e200_rx);
++			entry->e200_rx = NULL;
+ 			if (entry->buf)
+ 				iio_buffer_destroy(entry->buf);
+ 
+@@ -606,6 +626,19 @@
+ 					iio_channel_disable(chn);
+ 			}
+ 
++
++            thd = SLIST_FIRST(&entry->thdlist_head);
++            if (e200_profile_device(dev) &&
++                samples_count >= 262144 && nb_words == 1 && entry->mask[0] == 3 &&
++                !entry->cyclic && thd && !SLIST_NEXT(thd, dev_list_entry) &&
++                !thd->is_writer && thd->pdata->fd_out_is_socket)
++            {
++                samples_count = 262144;
++                /* This profile owns the RX queue depth. The remote READBUF
++                 * request can still span any number of these DMA blocks. */
++                ret = iio_device_set_kernel_buffers_count(dev, 32);
++                if (ret < 0) break;
++            }
+ 			entry->buf = iio_device_create_buffer(dev,
+ 					samples_count, entry->cyclic);
+ 			if (!entry->buf) {
+@@ -613,6 +646,17 @@
+ 				IIO_ERROR("Unable to create buffer\n");
+ 				break;
+ 			}
++
++            thd = SLIST_FIRST(&entry->thdlist_head);
++            if (e200_profile_device(dev) &&
++                samples_count == 262144 && nb_words == 1 && entry->mask[0] == 3 &&
++                !entry->cyclic && thd && !SLIST_NEXT(thd, dev_list_entry) &&
++                !thd->is_writer && thd->pdata->fd_out_is_socket) {
++                entry->e200_rx = e200_rx_open(dev, entry->buf, thd->pdata->fd_out);
++                if (!entry->e200_rx) { ret = -errno; break; }
++                thd->pdata->e200_rx = entry->e200_rx;
++
++            }
+ 			entry->cancelled = false;
+ 
+ 			/* Signal the threads that we opened the device */
+@@ -660,7 +704,7 @@
+ 		if (has_readers) {
+ 			ssize_t nb_bytes;
+ 
+-			ret = iio_buffer_refill(entry->buf);
++			ret = entry->e200_rx ? e200_rx_next(entry->e200_rx) : iio_buffer_refill(entry->buf);
+ 
+ 			pthread_mutex_lock(&entry->thdlist_lock);
+ 
+@@ -787,8 +831,11 @@
+ 		next_thd = SLIST_NEXT(thd, dev_list_entry);
+ 		SLIST_REMOVE(&entry->thdlist_head, thd, ThdEntry, dev_list_entry);
+ 		thd->wait_for_open = false;
++		thd->pdata->e200_rx = NULL;
+ 		signal_thread(thd, ret);
+ 	}
++	e200_rx_close(entry->e200_rx);
++	entry->e200_rx = NULL;
+ 	if (entry->buf) {
+ 		iio_buffer_destroy(entry->buf);
+ 		entry->buf = NULL;
+@@ -913,6 +960,7 @@
+ 	struct DevEntry *entry = t->entry;
+ 
+ 	pthread_mutex_lock(&entry->thdlist_lock);
++	t->pdata->e200_rx = NULL;
+ 	if (!entry->closed) {
+ 		entry->update_mask = true;
+ 		SLIST_REMOVE(&entry->thdlist_head, t, ThdEntry, dev_list_entry);
+@@ -1012,7 +1060,7 @@
+ 	pthread_mutex_lock(&devlist_lock);
+ 	entry = iio_device_get_data(dev);
+ 	if (entry) {
+-		if (cyclic || entry->cyclic) {
++		if (cyclic || entry->cyclic || e200_profile_device(dev)) {
+ 			/* Only one client allowed in cyclic mode */
+ 			pthread_mutex_unlock(&devlist_lock);
+ 
+@@ -1436,7 +1484,13 @@
+ 					pfd[0].revents & POLLRDHUP)
+ 				return 0;
+ 
+-			/* First read from the socket, without advancing the
++			if (pfd[0].revents & POLLERR) {
++                int error = pdata->e200_rx ? e200_rx_reap(pdata->e200_rx) : -EIO;
++                if (error) return error;
++            }
++            if (!(pfd[0].revents & POLLIN)) continue;
++
++            /* First read from the socket, without advancing the
+ 			 * read offset */
+ 			ret = recv(pdata->fd_in, buf, len,
+ 					MSG_NOSIGNAL | MSG_PEEK);
+@@ -1492,6 +1546,7 @@
+ 	unsigned int i;
+ 	int ret;
+ 
++	pdata.e200_rx = NULL;
+ 	pdata.ctx = ctx;
+ 	pdata.stop = false;
+ 	pdata.fd_in = fd_in;
+--- a/iiod/ops.h
++++ b/iiod/ops.h
+@@ -55,6 +55,7 @@
+ };
+ 
+ struct parser_pdata {
++	struct e200_rx *e200_rx;
+ 	struct iio_context *ctx;
+ 	bool stop, verbose;
+ 	int fd_in, fd_out;
+--- a/iiod/CMakeLists.txt
++++ b/iiod/CMakeLists.txt
+@@ -28,7 +28,7 @@
+ 	set_source_files_properties(${BISON_parser_OUTPUTS} PROPERTIES COMPILE_FLAGS "-Wno-sign-compare")
+ endif ()
+ 
+-set(IIOD_CFILES iiod.c ops.c thread-pool.c ${BISON_parser_OUTPUTS} ${FLEX_lexer_OUTPUTS})
++set(IIOD_CFILES iiod.c ops.c thread-pool.c e200-rx.c legacy-rx.c tcp-transport.c ${BISON_parser_OUTPUTS} ${FLEX_lexer_OUTPUTS})
+ 
+ option(WITH_AIO "Build IIOD with async. I/O support" ON)
+ if (WITH_AIO)
+--- /dev/null
++++ b/iiod/e200-rx.c
+@@ -0,0 +1,211 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * E200 opt-in IIOD adapter. DMA ownership moves on CPU0 while CPU1 sends
++ * immutable pages. The standard IIOD READBUF framing is unchanged.
++ */
++#ifndef _GNU_SOURCE
++#define _GNU_SOURCE
++#endif
++#include "e200-rx.h"
++#include "legacy-rx.h"
++#include "tcp-transport.h"
++#include "payload-crc.h"
++#include <pthread.h>
++#include <sched.h>
++#include <errno.h>
++#include <stdbool.h>
++#include <stdlib.h>
++#include <time.h>
++#include <stdio.h>
++
++#define RX_BLOCKS 32
++#define RX_BLOCK_BYTES 1048576
++struct record { void *data; unsigned id; size_t size; };
++struct e200_rx {
++    struct legacy_rx *rx;
++    struct tcp_transport *tcp;
++    pthread_t thread;
++    pthread_mutex_t lock;
++    pthread_cond_t changed;
++    struct record ready[RX_BLOCKS], current;
++    unsigned head, tail, count;
++    unsigned release[RX_BLOCKS], release_count;
++    unsigned flight_id[RX_BLOCKS], slot;
++    bool flight[RX_BLOCKS], held, stop, verify_crc;
++    uint32_t crc, crc_table[256];
++    uint64_t payload_bytes;
++    int error;
++};
++
++/* Only this thread calls legacy dequeue/enqueue. The main thread returns
++ * completed TCP slots through release[], never directly to the DMA engine. */
++static void *producer(void *opaque)
++{
++    struct e200_rx *p = opaque;
++    unsigned owned = 0;
++    for (;;) {
++        unsigned releases[RX_BLOCKS], n;
++        pthread_mutex_lock(&p->lock);
++        while (!p->stop && owned == RX_BLOCKS && !p->release_count)
++            pthread_cond_wait(&p->changed, &p->lock);
++        if (p->stop) {
++            pthread_mutex_unlock(&p->lock);
++            break;
++        }
++        n = p->release_count;
++        for (unsigned i = 0; i < n; i++) releases[i] = p->release[i];
++        p->release_count = 0;
++        pthread_mutex_unlock(&p->lock);
++
++        int error = 0;
++        for (unsigned i = 0; i < n; i++) {
++            error = legacy_rx_enqueue(p->rx, releases[i]);
++            if (error) break;
++            owned--;
++        }
++        struct record record = {0};
++        ssize_t bytes = error ? error :
++            legacy_rx_dequeue(p->rx, &record.data, &record.id);
++        pthread_mutex_lock(&p->lock);
++        if (bytes < 0) {
++            p->error = (int)bytes;
++            pthread_cond_broadcast(&p->changed);
++            pthread_mutex_unlock(&p->lock);
++            break;
++        }
++        owned++;
++        record.size = (size_t)bytes;
++        p->ready[p->tail] = record;
++        p->tail = (p->tail + 1) % RX_BLOCKS;
++        p->count++;
++        pthread_cond_broadcast(&p->changed);
++        pthread_mutex_unlock(&p->lock);
++    }
++    return NULL;
++}
++
++struct e200_rx *e200_rx_open(struct iio_device *dev, struct iio_buffer *buf, int fd)
++{
++    struct e200_rx *p = calloc(1, sizeof(*p));
++    if (!p) return NULL;
++    p->rx = legacy_rx_open(dev, buf, RX_BLOCK_BYTES, RX_BLOCKS);
++    if (!p->rx) goto fail;
++    p->tcp = tcp_transport_create(fd, "borrowed-zerocopy", RX_BLOCK_BYTES, RX_BLOCKS);
++    if (!p->tcp) goto fail;
++    p->verify_crc = getenv("E200_IQ24_CRC") != NULL;
++    if (p->verify_crc) payload_crc_init(p->crc_table);
++    pthread_mutex_init(&p->lock, NULL);
++    pthread_cond_init(&p->changed, NULL);
++    pthread_attr_t attr;
++    pthread_attr_init(&attr);
++    int result = 0;
++#ifndef E200_RX_UNIT_TEST
++    cpu_set_t cpu;
++    CPU_ZERO(&cpu);
++    CPU_SET(0, &cpu);
++    result = pthread_attr_setaffinity_np(&attr, sizeof(cpu), &cpu);
++    if (!result) {
++        CPU_ZERO(&cpu);
++        CPU_SET(1, &cpu);
++        result = pthread_setaffinity_np(pthread_self(), sizeof(cpu), &cpu);
++    }
++#endif
++    if (!result) result = pthread_create(&p->thread, &attr, producer, p);
++    pthread_attr_destroy(&attr);
++    if (result) {
++        pthread_cond_destroy(&p->changed);
++        pthread_mutex_destroy(&p->lock);
++        errno = result;
++        goto fail;
++    }
++    fprintf(stderr, "E200: standard IIOD protocol, 32-block DMA / zero-copy RX enabled\n");
++    return p;
++fail: {
++    int saved = errno;
++    legacy_rx_close(p->rx);
++    tcp_transport_destroy(p->tcp);
++    free(p);
++    errno = saved;
++    return NULL;
++}}
++
++/* Called only by the IIOD connection or its rw thread, never concurrently.
++ * POLLERR on a zero-copy socket also means normal completion notifications. */
++int e200_rx_reap(struct e200_rx *p)
++{
++    return tcp_transport_reap(p->tcp);
++}
++
++ssize_t e200_rx_next(struct e200_rx *p)
++{
++    struct timespec start, now;
++    clock_gettime(CLOCK_MONOTONIC, &start);
++    for (;;) {
++        int result = tcp_transport_reap(p->tcp);
++        if (result) return result;
++        pthread_mutex_lock(&p->lock);
++        for (unsigned i = 0; i < RX_BLOCKS; i++) {
++            if (p->flight[i] && !tcp_transport_slot_pending(p->tcp, i)) {
++                p->release[p->release_count++] = p->flight_id[i];
++                p->flight[i] = false;
++            }
++        }
++        pthread_cond_broadcast(&p->changed);
++        ssize_t bytes = p->error;
++        if (!bytes && p->count && !p->flight[p->slot]) {
++            p->current = p->ready[p->head];
++            p->head = (p->head + 1) % RX_BLOCKS;
++            p->count--;
++            p->held = true;
++            bytes = (ssize_t)p->current.size;
++        }
++        pthread_mutex_unlock(&p->lock);
++        if (bytes) return bytes;
++        clock_gettime(CLOCK_MONOTONIC, &now);
++        if (now.tv_sec - start.tv_sec > 6) return -ETIMEDOUT;
++        struct timespec delay = {.tv_nsec = 100000};
++        nanosleep(&delay, NULL);
++    }
++}
++
++ssize_t e200_rx_send(struct e200_rx *p, size_t bytes)
++{
++    if (!p->held || bytes > p->current.size || p->flight[p->slot]) return -EINVAL;
++    uint32_t crc = p->crc;
++    if (p->verify_crc) crc = payload_crc32(crc, p->crc_table, p->current.data, bytes);
++    int result = tcp_transport_send(p->tcp, p->current.data, bytes);
++    if (result) return result;
++    p->crc = crc;
++    p->payload_bytes += bytes;
++    p->flight[p->slot] = true;
++    p->flight_id[p->slot] = p->current.id;
++    p->slot = (p->slot + 1) % RX_BLOCKS;
++    p->held = false;
++    return (ssize_t)bytes;
++}
++
++void e200_rx_close(struct e200_rx *p)
++{
++    if (!p) return;
++    pthread_mutex_lock(&p->lock);
++    p->stop = true;
++    pthread_cond_broadcast(&p->changed);
++    pthread_mutex_unlock(&p->lock);
++    legacy_rx_cancel(p->rx);
++    pthread_join(p->thread, NULL);
++    int result = tcp_transport_finish(p->tcp);
++    const struct tcp_stats *stats = tcp_transport_stats(p->tcp);
++    fprintf(stderr, "E200: zero-copy calls=%llu completed=%llu copied=%llu pending=%llu finish=%d\n",
++            (unsigned long long)stats->calls, (unsigned long long)stats->completed,
++            (unsigned long long)stats->copied_completions,
++            (unsigned long long)stats->pending, result);
++    if (p->verify_crc)
++        fprintf(stderr, "E200: payload bytes=%llu crc32=%08x\n",
++                (unsigned long long)p->payload_bytes, p->crc);
++    /* Stop DMA before unmapping. On socket failure, kernel page references
++     * retain any still-pinned allocation; no pending block is re-enqueued. */
++    legacy_rx_close(p->rx);
++    tcp_transport_destroy(p->tcp);
++    pthread_cond_destroy(&p->changed);
++    pthread_mutex_destroy(&p->lock);
++    free(p);
++}
+--- /dev/null
++++ b/iiod/e200-rx.h
+@@ -0,0 +1,12 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later */
++#ifndef E200_IIOD_RX_H
++#define E200_IIOD_RX_H
++#include <iio.h>
++struct e200_rx;
++/* Single network reader, RX1 I/Q, 32 legacy DMA blocks of 1 MiB. */
++struct e200_rx *e200_rx_open(struct iio_device *, struct iio_buffer *, int socket_fd);
++ssize_t e200_rx_next(struct e200_rx *);
++ssize_t e200_rx_send(struct e200_rx *, size_t);
++int e200_rx_reap(struct e200_rx *);
++void e200_rx_close(struct e200_rx *);
++#endif
+--- /dev/null
++++ b/iiod/legacy-rx.c
+@@ -0,0 +1,120 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Diagnostic client for the ADI Linux legacy block ABI (pinned Linux 6.12.77).
++ * Struct layout/ioctl numbers mirror include/linux/iio/buffer_impl.h.
++ * libiio configures channels and allocates the pool; this client takes over
++ * explicit dequeue/enqueue so TCP can retain several CPU-owned DMA blocks.
++ */
++#define _POSIX_C_SOURCE 200809L
++#include "legacy-rx.h"
++#include <errno.h>
++#include <fcntl.h>
++#include <poll.h>
++#include <stdbool.h>
++#include <stdatomic.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/ioctl.h>
++#include <sys/mman.h>
++#include <time.h>
++#include <unistd.h>
++#define MAX_BLOCKS 32
++struct block { uint32_t id, size, used, type, flags, offset; uint64_t timestamp; };
++_Static_assert(sizeof(struct block) == 32, "legacy IIO block ABI mismatch");
++#define QUERY _IOWR('i', 0xa2, struct block)
++#define ENQUEUE _IOWR('i', 0xa3, struct block)
++#define DEQUEUE _IOWR('i', 0xa4, struct block)
++struct legacy_rx {
++    int fd;
++    atomic_bool cancelled;
++    unsigned count;
++    size_t size;
++    char enable[160];
++    void *data[MAX_BLOCKS];
++    struct block block[MAX_BLOCKS];
++    bool held[MAX_BLOCKS];
++};
++static int retry_ioctl(int fd, unsigned long op, void *arg) {
++    int r; do { r = ioctl(fd, op, arg); } while (r < 0 && errno == EINTR);
++    return r < 0 ? -errno : r;
++}
++static int enable(struct legacy_rx *r, bool on) {
++    int fd = open(r->enable, O_WRONLY | O_CLOEXEC);
++    if (fd < 0) return -errno;
++    ssize_t n = write(fd, on ? "1" : "0", 1);
++    int saved = n == 1 ? 0 : -(n < 0 ? errno : EIO);
++    close(fd); return saved;
++}
++struct legacy_rx *legacy_rx_open(struct iio_device *dev, struct iio_buffer *buffer,
++                                 size_t size, unsigned blocks) {
++    if (blocks < 2 || blocks > MAX_BLOCKS || !size || size > 1048576) {
++        errno = EINVAL; return NULL;
++    }
++    const char *id = iio_device_get_id(dev);
++    if (strncmp(id, "iio:device", 10) || strspn(id + 10, "0123456789") != strlen(id + 10)) {
++        errno = EINVAL; return NULL;
++    }
++    struct legacy_rx *r = calloc(1, sizeof(*r));
++    if (!r) return NULL;
++    atomic_init(&r->cancelled, false);
++    r->size = size; r->fd = iio_buffer_get_poll_fd(buffer);
++    snprintf(r->enable, sizeof(r->enable), "/sys/bus/iio/devices/%s/buffer/enable", id);
++    int ret = r->fd < 0 ? r->fd : enable(r, false);
++    if (ret) goto fail;
++    /* The buffer is stopped before adding these aliases. Requeue its aborted
++     * blocks, then enable acquisition only after all mappings are ready. */
++    for (unsigned i = 0; i < blocks; i++) {
++        r->block[i].id = i;
++        ret = retry_ioctl(r->fd, QUERY, &r->block[i]);
++        if (ret) goto fail;
++        if (r->block[i].id != i || r->block[i].size != size) { ret = -EINVAL; goto fail; }
++        r->data[i] = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, r->fd, r->block[i].offset);
++        if (r->data[i] == MAP_FAILED) { r->data[i] = NULL; ret = -errno; goto fail; }
++        r->count++;
++        r->block[i].used = 0; r->block[i].flags = 0;
++        ret = retry_ioctl(r->fd, ENQUEUE, &r->block[i]);
++        if (ret) goto fail;
++    }
++    ret = enable(r, true);
++    if (ret) goto fail;
++    return r;
++fail:
++    legacy_rx_close(r); errno = -ret; return NULL;
++}
++ssize_t legacy_rx_dequeue(struct legacy_rx *r, void **data, unsigned *id) {
++    struct timespec now;
++    clock_gettime(CLOCK_MONOTONIC, &now);
++    time_t deadline = now.tv_sec + 6;
++    for (;;) {
++        if (atomic_load(&r->cancelled)) return -ECANCELED;
++        struct block b = {0};
++        int ret = retry_ioctl(r->fd, DEQUEUE, &b);
++        if (!ret) {
++            if (b.id >= r->count || r->held[b.id] || !b.used || b.used > r->size) return -EIO;
++            r->block[b.id] = b; r->held[b.id] = true;
++            *id = b.id; *data = r->data[b.id]; return b.used;
++        }
++        if (ret != -EAGAIN) return ret;
++        clock_gettime(CLOCK_MONOTONIC, &now);
++        if (now.tv_sec >= deadline) return -ETIMEDOUT;
++        struct pollfd p = {.fd = r->fd, .events = POLLIN};
++        ret = poll(&p, 1, 100);
++        if (ret < 0 && errno != EINTR) return -errno;
++        if (ret > 0 && (p.revents & (POLLERR | POLLHUP | POLLNVAL))) return -EIO;
++    }
++}
++int legacy_rx_enqueue(struct legacy_rx *r, unsigned id) {
++    if (id >= r->count || !r->held[id]) return -EINVAL;
++    r->block[id].used = 0; r->block[id].flags = 0;
++    int ret = retry_ioctl(r->fd, ENQUEUE, &r->block[id]);
++    if (!ret) r->held[id] = false;
++    return ret;
++}
++void legacy_rx_cancel(struct legacy_rx *r) { atomic_store(&r->cancelled, true); }
++void legacy_rx_close(struct legacy_rx *r) {
++    if (!r) return;
++    enable(r, false);
++    for (unsigned i = 0; i < r->count; i++) munmap(r->data[i], r->size);
++    free(r);
++}
+--- /dev/null
++++ b/iiod/legacy-rx.h
+@@ -0,0 +1,16 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later */
++#ifndef E200_LEGACY_RX_H
++#define E200_LEGACY_RX_H
++#include <iio.h>
++#include <stddef.h>
++#include <sys/types.h>
++struct legacy_rx;
++/* The caller retains the libiio buffer. Do not call libiio refill while this
++ * explicit queue owns it. The ABI is ADI's pinned legacy mmap interface. */
++struct legacy_rx *legacy_rx_open(struct iio_device *dev, struct iio_buffer *buffer,
++                                 size_t size, unsigned blocks);
++ssize_t legacy_rx_dequeue(struct legacy_rx *r, void **data, unsigned *id);
++int legacy_rx_enqueue(struct legacy_rx *r, unsigned id);
++void legacy_rx_cancel(struct legacy_rx *r);
++void legacy_rx_close(struct legacy_rx *r);
++#endif
+--- /dev/null
++++ b/iiod/tcp-transport.c
+@@ -0,0 +1,221 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later */
++#ifndef _GNU_SOURCE
++#define _GNU_SOURCE
++#endif
++#include "tcp-transport.h"
++#include <errno.h>
++#include <time.h>
++#include <linux/errqueue.h>
++#include <netinet/in.h>
++#include <poll.h>
++#include <stdbool.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/resource.h>
++#include <sys/socket.h>
++#include <unistd.h>
++#ifdef __ARM_NEON
++#include <arm_neon.h>
++#endif
++
++#define MAX_SLOTS 64
++#define MAX_PENDING 4096
++struct slot { unsigned char *data; unsigned pending; };
++struct request { uint32_t id; unsigned slot; bool active; };
++struct tcp_transport {
++    int fd;
++    bool zc, staging, borrowed;
++    size_t size;
++    unsigned slots, next_slot, ledger_cursor;
++    uint32_t next_id;
++    struct slot slot[MAX_SLOTS];
++    struct request request[MAX_PENDING];
++    struct tcp_stats stats;
++};
++
++static double monotonic(void) {
++    struct timespec ts;
++    clock_gettime(CLOCK_MONOTONIC, &ts);
++    return ts.tv_sec + ts.tv_nsec / 1e9;
++}
++
++static void copy_samples(unsigned char *restrict dst, const unsigned char *restrict src, size_t n) {
++#ifdef __ARM_NEON
++    /* Load a full 128-byte group before storing; normal non-cacheable DMA
++     * memory benefits from vector transfers. Unaligned tails remain valid. */
++    while (n >= 128) {
++        uint8x16_t a = vld1q_u8(src), b = vld1q_u8(src + 16);
++        uint8x16_t c = vld1q_u8(src + 32), d = vld1q_u8(src + 48);
++        uint8x16_t e = vld1q_u8(src + 64), f = vld1q_u8(src + 80);
++        uint8x16_t g = vld1q_u8(src + 96), h = vld1q_u8(src + 112);
++        vst1q_u8(dst, a); vst1q_u8(dst + 16, b);
++        vst1q_u8(dst + 32, c); vst1q_u8(dst + 48, d);
++        vst1q_u8(dst + 64, e); vst1q_u8(dst + 80, f);
++        vst1q_u8(dst + 96, g); vst1q_u8(dst + 112, h);
++        dst += 128; src += 128; n -= 128;
++    }
++#endif
++    if (n) memcpy(dst, src, n);
++}
++
++void tcp_copy_samples(void *dst, const void *src, size_t size) { copy_samples(dst, src, size); }
++
++static void complete_range(struct tcp_transport *t, uint32_t lo, uint32_t hi, bool copied) {
++    /* Inclusive wrapping IDs; do not release a slot merely because its LAST
++     * send completed. Earlier partial sends may complete out of order. */
++    for (unsigned i = 0; i < MAX_PENDING; i++) {
++        struct request *r = &t->request[i];
++        if (r->active && (uint32_t)(r->id - lo) <= (uint32_t)(hi - lo)) {
++            r->active = false;
++            t->slot[r->slot].pending--;
++            t->stats.pending--;
++            t->stats.completed++;
++            t->stats.copied_completions += copied;
++        }
++    }
++}
++
++static int drain(struct tcp_transport *t, bool wait) {
++    double start = monotonic();
++    if (wait) {
++        struct pollfd p = {.fd = t->fd, .events = 0};
++        int r;
++        do { r = poll(&p, 1, 5000); } while (r < 0 && errno == EINTR);
++        t->stats.wait_seconds += monotonic() - start;
++        if (r <= 0) return -(r == 0 ? ETIMEDOUT : errno);
++        if (!(p.revents & POLLERR)) return -EPIPE;
++    }
++    for (;;) {
++        union { struct cmsghdr align; unsigned char bytes[512]; } control;
++        char byte;
++        struct iovec v = {.iov_base = &byte, .iov_len = 1};
++        struct msghdr msg = {.msg_iov = &v, .msg_iovlen = 1,
++            .msg_control = control.bytes, .msg_controllen = sizeof(control.bytes)};
++        ssize_t n = recvmsg(t->fd, &msg, MSG_ERRQUEUE | MSG_DONTWAIT);
++        if (n < 0 && errno == EINTR) continue;
++        if (n < 0) return errno == EAGAIN ? 0 : -errno;
++        if (msg.msg_flags & MSG_CTRUNC) return -EMSGSIZE;
++        for (struct cmsghdr *cm = CMSG_FIRSTHDR(&msg); cm; cm = CMSG_NXTHDR(&msg, cm)) {
++            if (cm->cmsg_level != SOL_IP || cm->cmsg_type != IP_RECVERR ||
++                cm->cmsg_len < CMSG_LEN(sizeof(struct sock_extended_err))) continue;
++            const struct sock_extended_err *e = (const void *)CMSG_DATA(cm);
++            if (e->ee_errno) return -(int)e->ee_errno;
++            if (e->ee_origin == SO_EE_ORIGIN_ZEROCOPY)
++                complete_range(t, e->ee_info, e->ee_data, e->ee_code == SO_EE_CODE_ZEROCOPY_COPIED);
++        }
++    }
++}
++
++struct tcp_transport *tcp_transport_create(int fd, const char *mode, size_t size, unsigned slots) {
++    if (!size || slots < 1 || slots > MAX_SLOTS || size > 16 * 1024 * 1024 ||
++        size * slots > 128 * 1024 * 1024) { errno = EINVAL; return NULL; }
++    bool plain = !strcmp(mode, "plain"), neon = !strcmp(mode, "neon");
++    bool zc = !strcmp(mode, "zerocopy"), direct = !strcmp(mode, "dma-zerocopy");
++    bool borrowed = !strcmp(mode, "borrowed-zerocopy");
++    if (!plain && !neon && !zc && !direct && !borrowed) { errno = EINVAL; return NULL; }
++    struct tcp_transport *t = calloc(1, sizeof(*t));
++    if (!t) return NULL;
++    t->fd = fd; t->zc = zc || direct || borrowed; t->staging = neon || zc;
++    t->borrowed = borrowed;
++    t->size = size; t->slots = (zc || borrowed) ? slots : 1;
++    if (t->zc) {
++        struct rlimit limit;
++        if (getrlimit(RLIMIT_MEMLOCK, &limit)) goto fail;
++        rlim_t needed = size * t->slots + 1024 * 1024;
++        if (limit.rlim_cur < needed) {
++            limit.rlim_cur = needed;
++            if (limit.rlim_max < needed) limit.rlim_max = needed;
++            if (setrlimit(RLIMIT_MEMLOCK, &limit)) goto fail;
++        }
++        int one = 1;
++        if (setsockopt(fd, SOL_SOCKET, SO_ZEROCOPY, &one, sizeof(one))) goto fail;
++    }
++    if (t->staging) {
++        long page = sysconf(_SC_PAGESIZE);
++        if (page < 1) { errno = EINVAL; goto fail; }
++        for (unsigned i = 0; i < t->slots; i++) {
++            int r = posix_memalign((void **)&t->slot[i].data, page, size);
++            if (r) { errno = r; goto fail; }
++            memset(t->slot[i].data, 0, size); /* fault pages before acquisition */
++        }
++    }
++    return t;
++fail: {
++    int saved = errno;
++    tcp_transport_destroy(t); errno = saved; return NULL;
++}}
++
++int tcp_transport_finish(struct tcp_transport *t) {
++    double deadline = monotonic() + 10;
++    while (t->stats.pending) {
++        int r = drain(t, true);
++        if (r) return r;
++        if (monotonic() > deadline) return -ETIMEDOUT;
++    }
++    return 0;
++}
++
++int tcp_transport_send(struct tcp_transport *t, const void *data, size_t size) {
++    if (size > t->size) return -EMSGSIZE;
++    unsigned slot = t->next_slot;
++    double deadline = monotonic() + 10;
++    if (t->zc) {
++        int r = drain(t, false);
++        if (r) return r;
++        while (t->slot[slot].pending) {
++            r = drain(t, true);
++            if (r) return r;
++            if (monotonic() > deadline) return -ETIMEDOUT;
++        }
++    }
++    if (t->staging) {
++        double start = monotonic();
++        copy_samples(t->slot[slot].data, data, size);
++        t->stats.copy_seconds += monotonic() - start;
++        data = t->slot[slot].data;
++    }
++    size_t offset = 0;
++    while (offset < size) {
++        if (t->zc && t->stats.pending == MAX_PENDING) {
++            int r = drain(t, true);
++            if (r) return r;
++            if (monotonic() > deadline) return -ETIMEDOUT;
++            continue;
++        }
++        ssize_t n = send(t->fd, (const char *)data + offset, size - offset,
++                         MSG_NOSIGNAL | (t->zc ? MSG_ZEROCOPY : 0));
++        if (n < 0 && errno == EINTR) continue;
++        if (n < 0 && errno == EAGAIN) {
++            struct pollfd p = {.fd = t->fd, .events = POLLOUT};
++            int r = poll(&p, 1, 5000);
++            if (r <= 0) return -(r ? errno : ETIMEDOUT);
++            r = drain(t, false); if (r) return r;
++            if (monotonic() > deadline) return -ETIMEDOUT;
++            continue;
++        }
++        if (n <= 0) return -(n < 0 ? errno : EIO);
++        offset += n; t->stats.bytes += n; t->stats.calls++;
++        if (t->zc) {
++            while (t->request[t->ledger_cursor].active)
++                t->ledger_cursor = (t->ledger_cursor + 1) % MAX_PENDING;
++            t->request[t->ledger_cursor] = (struct request){.id = t->next_id++, .slot = slot, .active = true};
++            t->slot[slot].pending++; t->stats.pending++;
++        }
++    }
++    t->next_slot = (slot + 1) % t->slots;
++    /* Legacy IIO refill releases the previous DMA block. The diagnostic direct
++     * path must finish ALL sends before returning to that refill operation. */
++    return t->zc && !t->staging && !t->borrowed ? tcp_transport_finish(t) : 0;
++}
++
++int tcp_transport_reap(struct tcp_transport *t) { return drain(t, false); }
++unsigned tcp_transport_slot_pending(const struct tcp_transport *t, unsigned slot) { return t->slot[slot].pending; }
++
++const struct tcp_stats *tcp_transport_stats(const struct tcp_transport *t) { return &t->stats; }
++
++void tcp_transport_destroy(struct tcp_transport *t) {
++    if (!t) return;
++    for (unsigned i = 0; i < t->slots; i++)
++        if (!t->slot[i].pending) free(t->slot[i].data);
++    free(t);
++}
+--- /dev/null
++++ b/iiod/tcp-transport.h
+@@ -0,0 +1,28 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later */
++#ifndef E200_TCP_TRANSPORT_H
++#define E200_TCP_TRANSPORT_H
++#include <stddef.h>
++#include <stdint.h>
++
++struct tcp_transport;
++struct tcp_stats {
++    uint64_t bytes, calls, completed, copied_completions, pending;
++    double copy_seconds, wait_seconds;
++};
++/* plain: original send; neon: one NEON staging copy plus ordinary send;
++ * zerocopy: NEON staging ring plus MSG_ZEROCOPY;
++ * dma-zerocopy: diagnostic direct send, wait before returning ownership to IIO.
++ */
++struct tcp_transport *tcp_transport_create(int fd, const char *mode, size_t size, unsigned slots);
++int tcp_transport_send(struct tcp_transport *t, const void *data, size_t size);
++int tcp_transport_finish(struct tcp_transport *t);
++const struct tcp_stats *tcp_transport_stats(const struct tcp_transport *t);
++/* Call only after closing the socket. Uncompleted storage is deliberately
++ * retained until process exit on error, never returned to the malloc pool. */
++void tcp_transport_destroy(struct tcp_transport *t);
++/* Single-owner primitives for the threaded pipeline. Borrowed buffer storage
++ * must not change until this slot has no pending completions. */
++int tcp_transport_reap(struct tcp_transport *t);
++unsigned tcp_transport_slot_pending(const struct tcp_transport *t, unsigned slot);
++void tcp_copy_samples(void *dst, const void *src, size_t size);
++#endif
+--- /dev/null
++++ b/iiod/payload-crc.h
+@@ -0,0 +1,21 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later */
++#ifndef E200_PAYLOAD_CRC_H
++#define E200_PAYLOAD_CRC_H
++#include <stddef.h>
++#include <stdint.h>
++/* IEEE CRC-32, compatible with Python zlib.crc32; integrity diagnostics only. */
++static inline void payload_crc_init(uint32_t table[256]) {
++    for (unsigned i = 0; i < 256; i++) {
++        uint32_t c = i;
++        for (unsigned j = 0; j < 8; j++) c = (c >> 1) ^ (0xedb88320U & (0U - (c & 1)));
++        table[i] = c;
++    }
++}
++static inline uint32_t payload_crc32(uint32_t crc, const uint32_t table[256],
++                                     const void *data, size_t size) {
++    const unsigned char *p = data;
++    crc = ~crc;
++    while (size--) crc = table[(crc ^ *p++) & 255] ^ (crc >> 8);
++    return ~crc;
++}
++#endif

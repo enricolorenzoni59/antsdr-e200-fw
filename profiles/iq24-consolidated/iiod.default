@@ -1,0 +1,8 @@
+# Standard libiio 1.0 server with qualified native and legacy RX paths.
+# Keep 0.26 client libraries in /usr/lib; only this service uses private v1 libs.
+IIOD_OPTS="-D"
+export LD_LIBRARY_PATH=/opt/e200/libiio1/lib
+export E200_ZEROCOPY=async
+export E200_DMA_CPU=0 E200_NET_CPU=1 E200_LEGACY_CPU=1
+export E200_LEGACY_AGGREGATE=1 E200_RESPONSE_PREFETCH=1
+export E200_LEGACY_PREFETCH=1 E200_LEGACY_ASYNC=1 E200_LEGACY_HOLD=0

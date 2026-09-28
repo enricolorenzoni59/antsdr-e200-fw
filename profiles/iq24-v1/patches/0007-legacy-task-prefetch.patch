@@ -1,0 +1,79 @@
+--- a/iiod/CMakeLists.txt
++++ b/iiod/CMakeLists.txt
+@@ -5,7 +5,7 @@
+ check_pthread_set_name(HAS_PTHREAD_SETNAME_NP)
+ 
+ add_executable(iiod iiod.c interpreter.c responder.c rw.c thread-pool.c
+-                    xml-zstd.c e200-zerocopy.c tcp-transport.c)
++                    xml-zstd.c e200-zerocopy.c tcp-transport.c e200-legacy-prefetch.c)
+ set_target_properties(
+     iiod
+     PROPERTIES C_STANDARD 99
+--- a/iiod/ops.c
++++ b/iiod/ops.c
+@@ -21,6 +21,7 @@
+ #include "iio/iio.h"
+ #include "ops.h"
+ #include "e200-affinity.h"
++#include "e200-legacy-prefetch.h"
+ #include "parser.h"
+ #include "thread-pool.h"
+ 
+@@ -90,6 +91,7 @@
+ 
+ /* Corresponds to an opened device */
+ struct DevEntry {
++	struct e200_legacy *e200_legacy;
+ 	unsigned int ref_count;
+ 
+ 	struct iio_device *dev;
+@@ -403,6 +405,8 @@
+ static void free_buf_and_blocks(struct DevEntry *entry)
+ {
+ 	unsigned int i;
++	e200_legacy_close(entry->e200_legacy);
++	entry->e200_legacy = NULL;
+ 
+ 	if (entry->buf_stream) {
+ 		IIO_DEBUG("Disable buffer...\n");
+@@ -505,6 +509,20 @@
+ 			if (ret) {
+ 				IIO_ERROR("Unable to start buffer\n");
+ 				break;
++			}
++
++			thd = SLIST_FIRST(&entry->thdlist_head);
++			if (getenv("E200_LEGACY_PREFETCH") &&
++			    !strcmp(getenv("E200_LEGACY_PREFETCH"), "1") &&
++			    !is_output && !entry->cyclic && thd &&
++			    !SLIST_NEXT(thd, dev_list_entry) &&
++			    iio_device_get_name(dev) &&
++			    !strcmp(iio_device_get_name(dev), "cf-ad9361-lpc") &&
++			    iio_device_get_sample_size(dev, entry->mask) == 4 &&
++			    samples_count == 262144 && entry->nb_blocks >= 2 && entry->nb_blocks <= 32) {
++				entry->e200_legacy = e200_legacy_open(entry->buf_stream, entry->blocks, entry->nb_blocks);
++				if (!entry->e200_legacy) { ret = -errno; break; }
++				IIO_INFO("E200 legacy upstream-task prefetch enabled\n");
+ 			}
+ 
+ 			/* Signal the threads that we opened the device */
+@@ -562,7 +580,8 @@
+ 			 * nothing to dequeue. */
+ 			ret = 0;
+ 		} else {
+-			ret = iio_block_dequeue(block, false);
++			ret = entry->e200_legacy ? e200_legacy_next(entry->e200_legacy, entry->curr_block) :
++				iio_block_dequeue(block, false);
+ 		}
+ 
+ 		pthread_mutex_lock(&entry->thdlist_lock);
+@@ -660,7 +679,8 @@
+ 			}
+ 		}
+ 
+-		ret = iio_block_enqueue(block, nb_bytes, entry->cyclic);
++		ret = entry->e200_legacy ? e200_legacy_release(entry->e200_legacy, entry->curr_block) :
++			iio_block_enqueue(block, nb_bytes, entry->cyclic);
+ 		entry->curr_block = (entry->curr_block + 1) % entry->nb_blocks;
+ 		entry->tx_all_enqueued |= is_output && entry->curr_block == 0;
+ 

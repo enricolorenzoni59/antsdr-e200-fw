@@ -1,0 +1,32 @@
+--- a/iiod/network.c
++++ b/iiod/network.c
+@@ -8,6 +8,8 @@
+ 
+ #include <arpa/inet.h>
+ #include <errno.h>
++#include <fcntl.h>
++#include <sys/time.h>
+ #include <iio/iio.h>
+ #include <net/if.h>
+ #include <netinet/in.h>
+@@ -172,6 +174,20 @@
+ 			continue;
+ 		}
+ 
++		/* Diagnostic comparison with the old server's blocking send path. */
++		if (getenv("E200_BLOCKING_SOCKET") &&
++		    !strcmp(getenv("E200_BLOCKING_SOCKET"), "1")) {
++			struct timeval timeout = { .tv_sec = 5 };
++			int flags = fcntl(new, F_GETFL);
++			if (flags < 0 || fcntl(new, F_SETFL, flags & ~O_NONBLOCK) < 0 ||
++			    setsockopt(new, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0) {
++				IIO_PERROR(errno, "E200 blocking socket setup");
++				close(new);
++				continue;
++			}
++			IIO_INFO("E200 blocking socket, send timeout5s\n");
++		}
++
+ 		cdata = malloc(sizeof(*cdata));
+ 		if (!cdata) {
+ 			IIO_WARNING("Unable to allocate memory for client\n");

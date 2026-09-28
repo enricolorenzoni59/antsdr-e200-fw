@@ -1,0 +1,97 @@
+--- a/drivers/iio/industrialio-buffer.c
++++ b/drivers/iio/industrialio-buffer.c
+@@ -51,9 +51,6 @@
+ 
+ 	u64 context;
+ 
+-	/* Spinlock used for locking the dma_fence */
+-	spinlock_t lock;
+-
+ 	struct dma_buf_attachment *attach;
+ 	struct sg_table *sgt;
+ 	enum dma_data_direction dir;
+@@ -61,7 +58,12 @@
+ };
+ 
+ struct iio_dma_fence {
++	/*
++	 * Must remain the first member so the default release callback can pass
++	 * the fence directly to dma_fence_free().
++	 */
+ 	struct dma_fence base;
++	spinlock_t lock; /* protects base */
+ 	struct iio_dmabuf_priv *priv;
+ 	struct work_struct work;
+ };
+@@ -1660,17 +1662,18 @@
+ 
+ 	wake_up(&buffer->pollq);
+ 
+-	guard(mutex)(&buffer->dmabufs_mutex);
+-
++	/* Release the buffer mutex before iio_device_put() can free it. */
++	scoped_guard(mutex, &buffer->dmabufs_mutex) {
+ #ifdef CONFIG_IIO_DMA_BUF_MMAP_LEGACY
+-	iio_buffer_free_blocks(buffer);
++		iio_buffer_free_blocks(buffer);
+ #else
+-	/* Close all attached DMABUFs */
+-	list_for_each_entry_safe(priv, tmp, &buffer->dmabufs, entry) {
+-		list_del_init(&priv->entry);
+-		iio_buffer_dmabuf_put(priv->attach);
+-	}
++		/* Close all attached DMABUFs */
++		list_for_each_entry_safe(priv, tmp, &buffer->dmabufs, entry) {
++			list_del_init(&priv->entry);
++			iio_buffer_dmabuf_put(priv->attach);
++		}
+ #endif
++	}
+ 	kfree(ib);
+ 	clear_bit(IIO_BUSY_BIT_POS, &buffer->flags);
+ 	iio_device_put(indio_dev);
+@@ -1953,7 +1956,6 @@
+ 	if (!priv)
+ 		return -ENOMEM;
+ 
+-	spin_lock_init(&priv->lock);
+ 	priv->context = dma_fence_context_alloc(1);
+ 
+ 	dmabuf = dma_buf_get(fd);
+@@ -2078,18 +2080,9 @@
+ 	return "iio";
+ }
+ 
+-static void iio_buffer_dma_fence_release(struct dma_fence *fence)
+-{
+-	struct iio_dma_fence *iio_fence =
+-		container_of(fence, struct iio_dma_fence, base);
+-
+-	kfree(iio_fence);
+-}
+-
+ static const struct dma_fence_ops iio_buffer_dma_fence_ops = {
+ 	.get_driver_name	= iio_buffer_dma_fence_get_driver_name,
+ 	.get_timeline_name	= iio_buffer_dma_fence_get_driver_name,
+-	.release		= iio_buffer_dma_fence_release,
+ };
+ 
+ static int iio_buffer_enqueue_dmabuf(struct iio_dev_buffer_pair *ib,
+@@ -2143,6 +2136,8 @@
+ 		goto err_attachment_put;
+ 	}
+ 
++	spin_lock_init(&fence->lock);
++
+ 	fence->priv = priv;
+ 
+ 	seqno = atomic_add_return(1, &priv->seqno);
+@@ -2153,7 +2148,7 @@
+ 	 * the dma_fence.
+ 	 */
+ 	dma_fence_init(&fence->base, &iio_buffer_dma_fence_ops,
+-		       &priv->lock, priv->context, seqno);
++		       &fence->lock, priv->context, seqno);
+ 
+ 	ret = iio_dma_resv_lock(dmabuf, nonblock);
+ 	if (ret)

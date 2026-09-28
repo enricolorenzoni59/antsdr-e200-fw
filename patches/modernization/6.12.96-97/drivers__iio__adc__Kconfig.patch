@@ -1,0 +1,10 @@
+--- a/drivers/iio/adc/Kconfig
++++ b/drivers/iio/adc/Kconfig
+@@ -260,6 +260,7 @@
+ 	tristate "Analog Devices AD7380 ADC driver"
+ 	depends on SPI_MASTER
+ 	select SPI_OFFLOAD
++	select REGMAP
+ 	select IIO_BUFFER
+ 	select IIO_BUFFER_DMAENGINE
+ 	select IIO_TRIGGER

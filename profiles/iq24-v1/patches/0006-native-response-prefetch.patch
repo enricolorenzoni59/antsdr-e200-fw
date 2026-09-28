@@ -1,0 +1,28 @@
+--- a/iiod/responder.c
++++ b/iiod/responder.c
+@@ -371,6 +371,11 @@
+ 		ret = iio_task_cancel_sync(entry->dequeue_token, -1);
+ 		if (ret)
+ 			goto out_send_response;
++		/* The dequeue task may only have queued its response. Wait for
++		 * the upstream writer token before checking TCP page release. */
++		ret = iiod_io_wait_for_command_done(entry->io);
++		if (ret < 0)
++			goto out_send_response;
+ 		ret = e200_zc_wait(entry->e200_zc, iio_block_start(entry->block));
+ 		if (ret)
+ 			goto out_send_response;
+@@ -437,7 +442,12 @@
+ 	}
+ 
+ out_send_response:
+-	iiod_io_send_response(entry->io, (int32_t)ret, &data, nb_data);
++	if (buffer->pdata->e200_zc && !buffer->is_tx && nb_data &&
++	    getenv("E200_RESPONSE_PREFETCH") &&
++	    !strcmp(getenv("E200_RESPONSE_PREFETCH"), "1"))
++		iiod_io_send_response_async(entry->io, (int32_t)ret, &data, nb_data);
++	else
++		iiod_io_send_response(entry->io, (int32_t)ret, &data, nb_data);
+ 	return 0;
+ }
+ 

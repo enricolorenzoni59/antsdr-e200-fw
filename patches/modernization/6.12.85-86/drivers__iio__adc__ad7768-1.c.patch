@@ -1,0 +1,21 @@
+--- a/drivers/iio/adc/ad7768-1.c
++++ b/drivers/iio/adc/ad7768-1.c
+@@ -324,11 +324,16 @@
+ 	struct ad7768_state *st = iio_priv(indio_dev);
+ 	int readval, ret;
+ 
++	ret = ad7768_set_mode(st, AD7768_ONE_SHOT);
++	if (ret < 0)
++		return ret;
++
+ 	if (!st->spi_is_dma_mapped)
+ 		reinit_completion(&st->completion);
+ 
+-	ret = ad7768_set_mode(st, AD7768_ONE_SHOT);
+-	if (ret < 0)
++	/* One-shot mode requires a SYNC pulse to generate a new sample */
++	ret = ad7768_send_sync_pulse(st);
++	if (ret)
+ 		return ret;
+ 
+ 	if (!st->spi_is_dma_mapped) {

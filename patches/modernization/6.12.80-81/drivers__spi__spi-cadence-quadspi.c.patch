@@ -1,0 +1,74 @@
+--- a/drivers/spi/spi-cadence-quadspi.c
++++ b/drivers/spi/spi-cadence-quadspi.c
+@@ -1850,24 +1850,22 @@
+ 	if (refcount_read(&cqspi->inflight_ops) == 0)
+ 		return -ENODEV;
+ 
++	if (!refcount_read(&cqspi->refcount)) {
++		return -EBUSY;
++	}
++
++	refcount_inc(&cqspi->inflight_ops);
++
++	if (!refcount_read(&cqspi->refcount)) {
++		if (refcount_read(&cqspi->inflight_ops))
++			refcount_dec(&cqspi->inflight_ops);
++		return -EBUSY;
++	}
++
+ 	ret = pm_runtime_resume_and_get(dev);
+ 	if (ret) {
+ 		dev_err(&mem->spi->dev, "resume failed with %d\n", ret);
+-		return ret;
+-	}
+-
+-	if (!refcount_read(&cqspi->refcount)) {
+-		ret = -EBUSY;
+-		goto out_pm;
+-	}
+-
+-	refcount_inc(&cqspi->inflight_ops);
+-
+-	if (!refcount_read(&cqspi->refcount)) {
+-		if (refcount_read(&cqspi->inflight_ops))
+-			refcount_dec(&cqspi->inflight_ops);
+-		ret = -EBUSY;
+-		goto out_pm;
++		goto dec_inflight_refcount;
+ 	}
+ 
+ 	f_pdata = &cqspi->f_pdata[spi_get_chipselect(mem->spi, 0)];
+@@ -1882,7 +1880,7 @@
+ 	    (!op->data.nbytes || op->data.dtr)) {
+ 		ret = cqspi_setup_edgemode(mem, op);
+ 		if (ret)
+-			goto out_ref;
++			goto out_pm;
+ 	} else {
+ 		f_pdata->dtr = false;
+ 		if (cqspi->clk_tuned)
+@@ -1893,7 +1891,7 @@
+ 	    !wait_for_completion_timeout(&cqspi->tuning_complete,
+ 		msecs_to_jiffies(CQSPI_TUNING_TIMEOUT_MS))) {
+ 		ret = -ETIMEDOUT;
+-		goto out_ref;
++		goto out_pm;
+ 	}
+ 
+ 
+@@ -1902,12 +1900,12 @@
+ 	if (ret)
+ 		dev_err(&mem->spi->dev, "operation failed with %d\n", ret);
+ 
+-out_ref:
+-	if (refcount_read(&cqspi->inflight_ops) > 1)
+-		refcount_dec(&cqspi->inflight_ops);
+ out_pm:
+ 	pm_runtime_mark_last_busy(dev);
+ 	pm_runtime_put_autosuspend(dev);
++dec_inflight_refcount:
++	if (refcount_read(&cqspi->inflight_ops) > 1)
++		refcount_dec(&cqspi->inflight_ops);
+ 
+ 	return ret;
+ }

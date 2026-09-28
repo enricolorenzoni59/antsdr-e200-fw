@@ -1,0 +1,24 @@
+From: E200 firmware contributors
+Subject: [PATCH] ARM: dts: add an explicit E200 AD9363 dual-RX trial variant
+
+Original source: E200 board port of MicroPhase v0.39 DTS, plus ADI ad9361.c ID table.
+Purpose: the vendor ad9364 compatible forces rx2tx2=false even with the DT flag.
+Hardware function affected: both receive paths and their CMOS/ADC interface.
+Upstream status: E200-specific experimental board variant, not submitted.
+Reason local: requires simultaneous dual-RX hardware validation before promotion.
+License: GPL-2.0-only. No claim of phase coherence or measured alignment.
+
+diff --git a/arch/arm/boot/dts/xilinx/zynq-e200-dual-rx.dts b/arch/arm/boot/dts/xilinx/zynq-e200-dual-rx.dts
+new file mode 100644
+index 000000000..47f157d7b
+--- /dev/null
++++ b/arch/arm/boot/dts/xilinx/zynq-e200-dual-rx.dts
+@@ -0,0 +1,8 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* E200 AD9363 dual-RX trial; RF bandwidth/range remain limited to AD9363. */
++#include "zynq-e200.dts"
++
++&adc0_ad9364 {
++	compatible = "adi,ad9363a";
++	adi,2rx-2tx-mode-enable;
++};

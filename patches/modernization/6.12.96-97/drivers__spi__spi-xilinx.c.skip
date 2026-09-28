@@ -1,0 +1,2 @@
+2c6553b45c136677663a7fed78c6972a3586a07f25aa542e12ddb79ba626893f
+The stable patch changes xilinx_spi_find_buffer_size(), which does not exist in this ADI driver. ADI reads xlnx,fifo-depth from the device tree and uses that value directly. Retain the entire ADI file; applying the stable hunk to its IRQ handler would corrupt unrelated code.

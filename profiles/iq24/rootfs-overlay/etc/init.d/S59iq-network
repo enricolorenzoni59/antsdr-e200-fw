@@ -1,0 +1,16 @@
+#!/bin/sh
+# Tested Ethernet batching settings; no RF capture or transmission at startup.
+case "$1" in
+ start)
+  grep -q ' /sys/kernel/debug debugfs ' /proc/mounts || mount -t debugfs debugfs /sys/kernel/debug || exit 1
+  test "$(cat /sys/module/industrialio_buffer_dma/parameters/cached_rx)" = Y || exit 1
+  test "$(cat /sys/devices/system/cpu/online)" = 0-1 || exit 1
+  echo 400000 > /sys/class/net/eth0/gro_flush_timeout
+  echo 1 > /sys/class/net/eth0/napi_defer_hard_irqs
+  for irq in $(awk '/eth0/ {gsub(":", "", $1); print $1}' /proc/interrupts); do
+   echo 1 > /proc/irq/$irq/smp_affinity
+  done
+  ;;
+ stop) : ;;
+ *) echo "Usage: $0 {start|stop}" >&2; exit 1 ;;
+esac

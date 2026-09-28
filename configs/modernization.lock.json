@@ -1,0 +1,169 @@
+{
+  "status": "EXPERIMENTAL - hardware qualification required per candidate",
+  "baseline_commit": "3cf2e245e43af1201d69a24865454ff993b11bb8",
+  "buildroot": {
+    "repo": "https://github.com/buildroot/buildroot.git",
+    "tag": "2026.08",
+    "commit": "d5180309b1b66ef3b8eaccca70ad69be8e0729a1"
+  },
+  "libiio": {
+    "repo": "https://github.com/analogdevicesinc/libiio.git",
+    "tag": "v1.0.0",
+    "commit": "9a929664fd3effa500430626803ac59ecf2f4ed3"
+  },
+  "kernel": {
+    "adi_base_commit": "bf1d49f17fa9e15bc40be2615ef67cdf023f660a",
+    "stable_from": "6.12.77",
+    "stable_target": "6.12.111",
+    "stable_patches": [
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.77-78.xz",
+        "sha256": "680756f0bbed9ae82e2d510c699c982ae69c68bed099260683d67e8c38e3bf8d"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.78-79.xz",
+        "sha256": "821045d29ae6764755cfac45a9c7fc8fc335651007a2f237ac66fd8bbbaa8154"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.79-80.xz",
+        "sha256": "394eeb3c5d3b7c7a8fac613528ad21c469ec9bfb95244e36e9f119082deda06c"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.80-81.xz",
+        "sha256": "d534375e683eacbc7a546b66e66b85ddc218705c52dfb54ef6e972ab29ffa4e0"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.81-82.xz",
+        "sha256": "939fe0eccfe1dd1056cd6bfa1ae18bbcab7490a0e4c5025b9fc7862a4c5fab7d"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.82-83.xz",
+        "sha256": "7e35ebb2b6a05468bf42ce141d19ffb9e5476ae1b94c3e2031cea8b314e9860b"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.83-84.xz",
+        "sha256": "b2f1853223635bf3a9837b0d2eb4599b553fe6df7fa8507ead395a652075bd8c"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.84-85.xz",
+        "sha256": "44887aacf9bfe33e909ee75b5a95c9b9a4ebffdcb1b7c5e0fa04f69a1c7fda04"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.85-86.xz",
+        "sha256": "429fc7cae02dca43ef936e069cc9c109febd98c37b1ed0b1ff2f1660c8a9632a"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.86-87.xz",
+        "sha256": "a1480e88e4692096253902e8d8145551c1af643c7210c5625675fcd91dd7121b"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.87-88.xz",
+        "sha256": "e1e6a12a6e285efd692ef6129ecbe2bba6e0237e3758b3915cc713c71a99bc94"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.88-89.xz",
+        "sha256": "21ebb02181fb797a68187c055c9839565c26a6cc3596375fe2bdc06e853058c7"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.89-90.xz",
+        "sha256": "2bd08eb792a6079ed0d0494e5abee6b848c75e2c44cc9bc67d6d6e9d71442577"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.90-91.xz",
+        "sha256": "1bf4243bebfc62084388472a1176acbf058856cd00ef101821676163d43ab284"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.91-92.xz",
+        "sha256": "3111cbf84d2de811ca567024b4ebe17c32b9a3fd96a1de65287d781a9b93331a"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.92-93.xz",
+        "sha256": "1de592239d94013dbf94ae9c0451a7b5b83b931d7d82a147664b2d2e2b4fd027"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.93-94.xz",
+        "sha256": "1d5870d12ed13e87facd8eeb9df58fc7fbb0cde659b214e68ae4c92c2843624c"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.94-95.xz",
+        "sha256": "7d9e543ae9e64e6caa8b9a18a92d2c9cdb1a0494f2b35ac1a29b48d1ccefbdfb"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.95-96.xz",
+        "sha256": "d668695a32aa723e8c727f5c9cde5f4c26abdd979037e082ed575c4a0c3ba639"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.96-97.xz",
+        "sha256": "7879686c1a69b767dbeaa1208f9f6e72141b3e2b2ea8275a4f78c8c40a4acef1"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.97-98.xz",
+        "sha256": "77ba0be3da90106b124fcb4fd0f7a0d3cc59e28fc86eb7639b7a6a82895549a8"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.98-99.xz",
+        "sha256": "a3230c6b60082507e675eb629bf17ae2bc50931c12457ef7bdaf9b76ea4743b2"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.99-100.xz",
+        "sha256": "8f1de45c9bee801dad6b975da8d4db8cb658cf67c9ec4b6120ca4ad2d481bc70"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.100-101.xz",
+        "sha256": "e9af47cc72f03d3129b60a2f90e56e979f5e5a17a1de78beea4d4a49a66beda2"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.101-102.xz",
+        "sha256": "9d33f380bd41de335881dc24d39a14ad501b28ce591aeeb689284454ea709563"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.102-103.xz",
+        "sha256": "581f3765f0b4ea291d45e73ba0122d87b18a636ba9dc8671196b5832543c8fc1"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.103-104.xz",
+        "sha256": "f77f776fd5f4346c9684edc4e107a15e4db1a92de44ca072ae44576e503e1999"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.104-105.xz",
+        "sha256": "fe02b914cf6189120e2af814f9a304c5aaf8c8eb268162e287270faf79577b46"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.105-106.xz",
+        "sha256": "6a06dfdf261265d24f285804a148fff39f9eccac649a28edef57c51ded8a35a2"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.106-107.xz",
+        "sha256": "c7c3702b61699644de637b67161c4eb6fc4543ebf3b4d544e7471ded83872530"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.107-108.xz",
+        "sha256": "c31cab7238b4d89e1022360fba26e5a1086c0e96f7fb6684b3aeaf1da627b7d0"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.108-109.xz",
+        "sha256": "b0f2794d37c11c398d25ca4f432bf128f74e32b5cf39a622c5bab0a4ee326423"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.109-110.xz",
+        "sha256": "a3e0e295b72427fb039f13f9e458e15501a5349eeeeb1909c8e9261a5c361432"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.110-111.xz",
+        "sha256": "5848d1cc30a7d209a879fa5a5e7c3c6fcbd119d8512a4b0d09663d4f50b1fd37"
+      }
+    ],
+    "prepared_diff_sha256": "75b2c534a8059e49836c4e63b14212698ac04a8a2fa09544fc621eb79472a4f5",
+    "prepared_files_sha256": "147b4baa4b3a8b1cddb870e5e457521b98a3eb53a653b4e1706019f03f05501a"
+  },
+  "zstd": {
+    "version": "1.5.7",
+    "url": "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz",
+    "sha256": "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3"
+  },
+  "libaio": {
+    "version": "0.3.113",
+    "url": "https://releases.pagure.org/libaio/libaio-0.3.113.tar.gz",
+    "sha512": "65c30a102433bf8386581b03fc706d84bd341be249fbdee11a032b237a7b239e8c27413504fef15e2797b1acd67f752526637005889590ecb380e2e120ab0b71"
+  }
+}

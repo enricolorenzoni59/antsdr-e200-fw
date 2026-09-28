@@ -1,0 +1,20 @@
+--- a/drivers/mtd/spi-nor/swp.c
++++ b/drivers/mtd/spi-nor/swp.c
+@@ -321,8 +321,15 @@
+ 	/* Prefer top, if both are valid */
+ 	use_top = can_be_top;
+ 
+-	/* lock_len: length of region that should remain locked */
+-	if (use_top)
++	/*
++	 * lock_len: length of region that should remain locked.
++	 *
++	 * When can_be_top and can_be_bottom booleans are true, both adjacent
++	 * regions are unlocked, thus the entire flash can be unlocked.
++	 */
++	if (can_be_top && can_be_bottom)
++		lock_len = 0;
++	else if (use_top)
+ 		lock_len = mtd->size - (ofs + len);
+ 	else
+ 		lock_len = ofs;

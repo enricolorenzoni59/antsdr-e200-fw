@@ -1,0 +1,3 @@
+# Standard libiio network protocol; opt-in E200 RX1 accelerator.
+IIOD_OPTS="-D"
+export E200_IQ24=1

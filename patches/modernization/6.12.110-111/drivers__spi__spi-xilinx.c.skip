@@ -1,0 +1,2 @@
+2c6553b45c136677663a7fed78c6972a3586a07f25aa542e12ddb79ba626893f
+Upstream adds a timeout to the synchronous xilinx_spi_txrx_bufs completion wait. ADI has no such function or wait: it implements asynchronous transfer_one (xspi_start_transfer), completed by spi_finalize_current_transfer in its IRQ handler, with timeout managed by the SPI core. Applying this hunk would splice unrelated code into the runtime PM callback.

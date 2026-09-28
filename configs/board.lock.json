@@ -1,0 +1,5 @@
+{
+  "board": "ANTSDR E200",
+  "dtb_sha256": "148262888c3c23b3e795f9416e16538673e596112caa2273f5b857d2de879d20",
+  "source": "Pinned E200 device tree with retained vendor FPGA; changes require board review."
+}

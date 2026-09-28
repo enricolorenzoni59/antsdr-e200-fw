@@ -1,0 +1,11 @@
+diff --git a/drivers/firmware/xilinx/zynqmp-core.c b/drivers/firmware/xilinx/zynqmp-core.c
+--- a/drivers/firmware/xilinx/zynqmp-core.c
++++ b/drivers/firmware/xilinx/zynqmp-core.c
+@@ -678,6 +678,7 @@
+ 	return ret;
+ }
++EXPORT_SYMBOL_GPL(zynqmp_pm_invoke_fn);
+ 
+ /**
+  * zynqmp_pm_load_pdi_word_swap - Perform word swapping on a memory address.
+  * @address: Memory address to be word-swapped.

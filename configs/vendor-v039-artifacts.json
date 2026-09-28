@@ -1,0 +1,54 @@
+{
+  "source_url": "https://github.com/MicroPhase/antsdr-fw-patch/releases/download/v0.39/e200.zip",
+  "archive_sha256": "b8a2bf814baad48bbf336044c6fa3695d8523eb87345b1331eae1a4d975b143d",
+  "release": "v0.39",
+  "status": "vendor-reference-not-hardware-validated",
+  "redistribution_review": "pending",
+  "files": [
+    {
+      "path": "build_sdimg/BOOT.bin",
+      "size": 2926092,
+      "sha256": "d3b30bc1bdda7872d05b976e7ec2841a40287a85272003bee1bf7d4fdae8ccb0"
+    },
+    {
+      "path": "build_sdimg/uImage",
+      "size": 4585184,
+      "sha256": "4faf24b378af1ad8eb5deeab2eb064276174b904584d6e79400aa6de50aa40e0"
+    },
+    {
+      "path": "build_sdimg/devicetree.dtb",
+      "size": 22368,
+      "sha256": "af2a742faed575f86a5827d4db6a34a40124cee1abafd33eed5de0ee71423e84"
+    },
+    {
+      "path": "build_sdimg/uEnv.txt",
+      "size": 7837,
+      "sha256": "487185f8fbb5f2a7f25cffddccdeb8cd86f8386785fcca371ddbb1f083db4286"
+    },
+    {
+      "path": "build_sdimg/uramdisk.image.gz",
+      "size": 6645236,
+      "sha256": "fbe8214652c759295ade87b1e55ac008596fafd4fbf186bd6df1b1bfa1ce7275"
+    },
+    {
+      "path": "build/system_top.bit",
+      "size": 2404868,
+      "sha256": "c73eb2787b0afbe8af1081be4cd4ff6d676789e91dd8f3fdd83158f58f86d423"
+    },
+    {
+      "path": "build/system_top.xsa",
+      "size": 866622,
+      "sha256": "c106ef48bd1f058288a30bd29a01196eb8b74650246849bc17219bce09ac84b1"
+    },
+    {
+      "path": "build/sdk/fsbl/Release/fsbl.elf",
+      "size": 475808,
+      "sha256": "6fadb9c03ad13a1af4652dd3fdbb42fd10416488b93ac0e5e952d6c3f03101fe"
+    },
+    {
+      "path": "build/LICENSE.html",
+      "size": 650874,
+      "sha256": "518647dffd45f8a6ba508636bf4b26e0245eb52e6a7715efa89dcad4d9c4192e"
+    }
+  ]
+}

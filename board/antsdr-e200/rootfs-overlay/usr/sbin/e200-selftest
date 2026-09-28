@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+"""Bounded receive-only E200 checks. A passing self-test is not release validation."""
+import argparse
+from datetime import datetime, timezone
+import importlib.machinery
+import importlib.util
+import json
+import os
+from pathlib import Path
+import select
+import shutil
+import struct
+import subprocess
+import tempfile
+import time
+
+
+def read(path):
+    return Path(path).read_text().strip()
+
+
+def run(command, timeout=15):
+    p = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+    if p.returncode:
+        raise RuntimeError(f'{command[0]} exit {p.returncode}: {p.stderr.strip()}')
+    return p.stdout.strip()
+
+
+def attribute(device, names, value=None):
+    for name in names:
+        p = device / name
+        if p.exists():
+            if value is not None:
+                p.write_text(str(value))
+            return read(p)
+    raise RuntimeError('Missing IIO attribute: ' + ', '.join(names))
+
+
+def stream(channels, rate, seconds):
+    samples = round(rate * seconds)
+    command = ['iio_readdev', '-T', '5000', '-b', '262144', '-s', str(samples),
+               'cf-ad9361-lpc', *channels]
+    started = time.monotonic()
+    received = 0
+    with tempfile.TemporaryFile() as errors:
+        proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=errors)
+        try:
+            while True:
+                if time.monotonic() - started > seconds + 20:
+                    raise RuntimeError('RX exceeded bounded timeout')
+                ready, _, _ = select.select([proc.stdout], [], [], 1)
+                if ready:
+                    chunk = os.read(proc.stdout.fileno(), 65536)
+                    if not chunk:
+                        break
+                    received += len(chunk)
+            status = proc.wait(timeout=5)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait()
+            proc.stdout.close()
+        errors.seek(0)
+        stderr = errors.read(16384).decode(errors='replace')
+    elapsed = time.monotonic() - started
+    expected = samples * len(channels) * 2
+    result = {'requested_rate': rate, 'requested_samples': samples,
+              'bytes_received': received, 'expected_bytes': expected,
+              'samples_received': received // (len(channels) * 2),
+              'elapsed_seconds': elapsed, 'effective_rate': received / (len(channels) * 2 * elapsed),
+              'channels': channels, 'exit_status': status, 'stderr': stderr,
+              'dma_continuity_verified': False}
+    if status or received != expected:
+        raise RuntimeError(json.dumps(result))
+    return result
+
+
+def select_rx_channels(available, receivers):
+    """Require every I/Q component of the explicitly requested RX profile."""
+    if receivers not in (1, 2):
+        raise ValueError("receivers must be 1 or 2")
+    channels = [f"voltage{i}" for i in range(receivers * 2)]
+    missing = [c for c in channels if c not in available]
+    if missing:
+        raise RuntimeError("Missing requested RX channels: " + ", ".join(missing))
+    return channels
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--json', action='store_true')
+    parser.add_argument('--rx-channels', type=int, choices=(1, 2), default=2,
+                        help='Required complex receivers (default: 2); never inferred from hardware')
+    parser.add_argument('--seconds', type=int, default=60)
+    parser.add_argument('--rate', type=int, default=4000000)
+    parser.add_argument('--gain', type=int, default=30)
+    parser.add_argument('--max-temp-c', type=float, default=85)
+    parser.add_argument('--ping-host')
+    args = parser.parse_args()
+    if not 1 <= args.seconds <= 1800 or not 1 <= args.rate <= 61440000:
+        parser.error('duration must be 1..1800 seconds and rate 1..61440000')
+    checks = []
+
+    def check(name, action):
+        try:
+            details = action()
+            if details is False:
+                raise RuntimeError('condition not satisfied')
+            checks.append({'name': name, 'status': 'PASS', 'details': details})
+        except (OSError, ValueError, RuntimeError, struct.error, subprocess.SubprocessError) as error:
+            checks.append({'name': name, 'status': 'FAIL', 'details': str(error)})
+        return checks[-1]['status'] == 'PASS'
+
+    base = Path('/sys/firmware/devicetree/base')
+    check('Board identification', lambda: b'microphase,antsdr-e200' in (base / 'compatible').read_bytes())
+    check('Zynq platform', lambda: b'xlnx,zynq-7000' in (base / 'compatible').read_bytes())
+
+    def ram():
+        nodes = list(base.glob('memory*'))
+        size = sum(struct.unpack('>II', (node / 'reg').read_bytes()[:8])[1] for node in nodes if (node / 'reg').exists())
+        if not 480 * 1024**2 <= size <= 544 * 1024**2:
+            raise RuntimeError(f'Unexpected physical RAM: {size} bytes')
+        return {'physical_bytes': size}
+
+    check('RAM', ram)
+    check('Kernel', lambda: read('/proc/sys/kernel/osrelease'))
+    check('Root filesystem', lambda: Path('/sbin/init').exists() and Path('/etc/os-release').exists())
+    check('Free space', lambda: shutil.disk_usage('/tmp').free >= 1024**2)
+    devices = {read(p / 'name'): p for p in Path('/sys/bus/iio/devices').glob('iio:device*') if (p / 'name').exists()}
+    check('FPGA RX/TX cores instantiated', lambda: all(n in devices for n in ['cf-ad9361-lpc', 'cf-ad9361-dds-core-lpc']))
+    states = list(Path('/sys/class/fpga_manager').glob('*/state'))
+    check('FPGA configured', lambda: any(read(p) == 'operating' for p in states))
+    check('AD936x detected', lambda: 'ad9361-phy' in devices)
+    check('IIO context', lambda: run(['iio_info', '-u', 'local:']))
+    adc = devices.get('cf-ad9361-lpc', Path('/nonexistent'))
+    available = sorted(p.name[len('in_'):-len('_en')] for p in (adc / 'scan_elements').glob('in_voltage*_en'))
+    check('RX1 I/Q available', lambda: all(c in available for c in ['voltage0', 'voltage1']))
+    if args.rx_channels == 2:
+        check('RX2 I/Q available', lambda: all(c in available for c in ['voltage2', 'voltage3']))
+    dac = devices.get('cf-ad9361-dds-core-lpc', Path('/nonexistent'))
+    check('TX scan channels available (no transmission)', lambda: len(list((dac / 'scan_elements').glob('out_voltage*_en'))) >= 4)
+    phy = devices.get('ad9361-phy', Path('/nonexistent'))
+    check('LO 1090 MHz', lambda: int(attribute(phy, ['out_altvoltage0_RX_LO_frequency'], 1090000000)) == 1090000000)
+    rate = None
+
+    def set_rate():
+        nonlocal rate
+        rate = int(attribute(phy, ['in_voltage_sampling_frequency', 'in_voltage0_sampling_frequency'], args.rate))
+        if rate != args.rate:
+            raise RuntimeError(f'requested {args.rate}, actual {rate}')
+        return {'requested_rate': args.rate, 'actual_rate': rate}
+
+    check('RX sampling rate', set_rate)
+
+    def gain():
+        attribute(phy, ['in_voltage0_gain_control_mode'], 'manual')
+        value = attribute(phy, ['in_voltage0_hardwaregain'], args.gain)
+        if abs(float(value.split()[0]) - args.gain) > 0.1:
+            raise RuntimeError('Gain readback mismatch: ' + value)
+        return value
+
+    check('RX1 manual gain', gain)
+    if rate == args.rate:
+        check('Bounded RX stream', lambda: stream(
+            select_rx_channels(available, args.rx_channels), rate, args.seconds))
+    else:
+        checks.append({'name': 'Bounded RX stream', 'status': 'FAIL', 'details': 'rate setup failed'})
+    net = Path('/sys/class/net/eth0')
+    check('Ethernet interface', net.exists)
+    check('Ethernet carrier', lambda: read(net / 'carrier') == '1')
+    check('Ethernet 1000/full', lambda: read(net / 'speed') == '1000' and read(net / 'duplex') == 'full')
+    check('IPv4 configuration', lambda: bool(run(['ip', '-4', '-o', 'addr', 'show', 'dev', 'eth0']).strip()))
+    if args.ping_host:
+        check('Ping configured host', lambda: run(['ping', '-c', '3', '-W', '2', args.ping_host]))
+
+    def thermal():
+        tool = Path(__file__).with_name('e200-telemetry')
+        loader = importlib.machinery.SourceFileLoader('e200_telemetry', str(tool))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+        data = module.telemetry()
+        temps = data['temperatures']
+        if not temps or any(t['celsius'] >= args.max_temp_c for t in temps):
+            raise RuntimeError(json.dumps({'threshold_c': args.max_temp_c, 'temperatures': temps}))
+        return data
+
+    check('Thermal telemetry', thermal)
+
+    def storage():
+        # /tmp may be RAM: this verifies temporary storage, not the physical SD.
+        with tempfile.TemporaryFile(dir='/tmp') as f:
+            f.write(b'e200-selftest\n'); f.flush(); os.fsync(f.fileno()); f.seek(0)
+            return f.read() == b'e200-selftest\n'
+
+    check('Temporary storage read/write (not SD validation)', storage)
+    passed = all(c['status'] == 'PASS' for c in checks)
+    report = {'schema_version': 1, 'timestamp': datetime.now(timezone.utc).isoformat(),
+              'result': 'PASS' if passed else 'FAIL', 'hardware_validated': False,
+              'board_revision': 'unknown', 'checks': checks,
+              'requested_rx_channels': args.rx_channels, 'available_scan_channels': available,
+              'limitations': ['No SD integrity, DMA continuity, phase coherence, reboot or soak claim',
+                              'Receive test changes volatile LO/rate/gain settings; no TX test performed']}
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print('ANTSDR E200 self-test\n')
+        for c in checks:
+            print(f'[{c["status"]}] {c["name"]}')
+        print('\nResult: ' + report['result'])
+    return 0 if passed else 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

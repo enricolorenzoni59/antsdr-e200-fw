@@ -1,0 +1,22 @@
+--- a/iiod/ops.c
++++ b/iiod/ops.c
+@@ -77,6 +77,19 @@
+ 		if ((pfd[1].revents & POLLRDHUP) || (pfd[2].revents & POLLIN)) {
+ 			pthread_mutex_lock(mutex);
+ 			return -EPIPE;
++		}
++
++		if (pfd[1].revents & POLLERR) {
++			int err = thd->pdata->e200_zc ? e200_zc_reap(thd->pdata->e200_zc) : -EIO;
++			if (err) {
++				pthread_mutex_lock(mutex);
++				return err;
++			}
++		}
++		if (!(pfd[0].revents & POLLIN)) {
++			ret = -1;
++			errno = EAGAIN;
++			continue;
+ 		}
+ 
+ 		do {

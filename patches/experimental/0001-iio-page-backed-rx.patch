@@ -1,0 +1,198 @@
+From: E200 Community Firmware <community@example.invalid>
+Subject: [EXPERIMENTAL] iio: opt-in page-backed legacy RX buffers
+
+Original-source: AnalogDevicesInc/linux bf1d49f17fa9e15bc40be2615ef67cdf023f660a
+Purpose: allow TCP MSG_ZEROCOPY to reference legacy IIO RX pages.
+Hardware-function: RX DMA buffer allocation, cache ownership, userspace mmap.
+Upstream-status: local experiment; NOT submitted or production qualified.
+Reason-local: evaluate eliminating DMA-to-socket copies on Zynq E200.
+
+Disabled by default. Enable industrialio_buffer_dma.cached_rx=1 at RAM boot.
+RX only; noncyclic, <=1 MiB blocks, bounded physically contiguous allocations.
+Compound page references protect allocation lifetime; explicit streaming DMA
+synchronization transfers ownership at enqueue/dequeue. The application must
+wait for every TCP completion before returning a block to IIO. No support for
+untrusted users violating the existing IIO ownership contract is added.
+
+Not included in patches/linux/series. No stable release claim.
+
+diff --git a/drivers/iio/buffer/industrialio-buffer-dma.c b/drivers/iio/buffer/industrialio-buffer-dma.c
+index a85eec3f3..d65c6fd8d 100644
+--- a/drivers/iio/buffer/industrialio-buffer-dma.c
++++ b/drivers/iio/buffer/industrialio-buffer-dma.c
+@@ -21,6 +21,7 @@
+ #include <linux/dma-fence.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/sizes.h>
++#include <linux/mm.h>
+ 
+ /*
+  * For DMA buffers the storage is sub-divided into so called blocks. Each block
+@@ -98,6 +99,12 @@
+ #ifdef CONFIG_IIO_DMA_BUF_MMAP_LEGACY
+ static unsigned int iio_dma_buffer_max_block_size = SZ_16M;
+ module_param_named(max_block_size, iio_dma_buffer_max_block_size, uint, 0644);
++/* Experimental RX-only allocator. Opt-in at boot; never changes existing blocks.
++ * Userspace must keep dequeued blocks immutable until all network completions.
++ */
++static bool cached_rx;
++module_param(cached_rx, bool, 0400);
++MODULE_PARM_DESC(cached_rx, "Experimental page-backed legacy RX buffers (<=1 MiB)");
+ #endif
+ 
+ static void iio_buffer_block_release(struct kref *kref)
+@@ -109,8 +116,15 @@ static void iio_buffer_block_release(struct kref *kref)
+ 	WARN_ON(block->fileio && block->state != IIO_BLOCK_STATE_DEAD);
+ 
+ #ifdef CONFIG_IIO_DMA_BUF_MMAP_LEGACY
+-	dma_free_coherent(block->queue->dev, PAGE_ALIGN(block->block.size),
+-					block->vaddr, block->phys_addr);
++	if (block->rx_page) {
++		dma_unmap_page(queue->dev, block->phys_addr,
++			      PAGE_ALIGN(block->block.size), DMA_FROM_DEVICE);
++		/* VM/network references can outlive the IIO block. */
++		put_page(block->rx_page);
++	} else {
++		dma_free_coherent(queue->dev, PAGE_ALIGN(block->block.size),
++				  block->vaddr, block->phys_addr);
++	}
+ #else
+ 	if (block->fileio) {
+ 		dma_free_coherent(queue->dev, PAGE_ALIGN(block->size),
+@@ -536,11 +550,31 @@ static struct iio_dma_buffer_block
+ 	if (!block)
+ 		return NULL;
+ 
+-	block->vaddr = dma_alloc_coherent(queue->dev, PAGE_ALIGN(size),
+-					  &block->phys_addr, GFP_KERNEL);
+-	if (!block->vaddr) {
+-		kfree(block);
+-		return NULL;
++	if (cached_rx && queue->buffer.direction == IIO_BUFFER_DIRECTION_IN) {
++		/* Compound pages are required by vm_insert_page for a higher-order
++		 * allocation. Do not expose coherent PFNMAP memory as ordinary RAM.
++		 */
++		if (size > SZ_1M)
++			goto err_free;
++		block->rx_page = alloc_pages(GFP_KERNEL | __GFP_ZERO | __GFP_COMP,
++					     get_order(size));
++		if (!block->rx_page)
++			goto err_free;
++		block->vaddr = page_address(block->rx_page);
++		block->phys_addr = dma_map_page(queue->dev, block->rx_page, 0,
++					       PAGE_ALIGN(size), DMA_FROM_DEVICE);
++		if (dma_mapping_error(queue->dev, block->phys_addr)) {
++			put_page(block->rx_page);
++			goto err_free;
++		}
++		/* A newly allocated block starts owned by userspace. */
++		dma_sync_single_for_cpu(queue->dev, block->phys_addr,
++					PAGE_ALIGN(size), DMA_FROM_DEVICE);
++	} else {
++		block->vaddr = dma_alloc_coherent(queue->dev, PAGE_ALIGN(size),
++						  &block->phys_addr, GFP_KERNEL);
++		if (!block->vaddr)
++			goto err_free;
+ 	}
+ 
+ 	block->block.size = size;
+@@ -552,6 +586,10 @@ static struct iio_dma_buffer_block
+ 	iio_buffer_get(&queue->buffer);
+ 
+ 	return block;
++
++err_free:
++	kfree(block);
++	return NULL;
+ }
+ #endif
+ 
+@@ -921,6 +959,10 @@ int iio_dma_buffer_enqueue_block(struct iio_buffer *buffer,
+ 	}
+ 
+ 	dma_block = queue->blocks[block->id];
++	if (dma_block->rx_page && (block->flags & IIO_BUFFER_BLOCK_FLAG_CYCLIC)) {
++		ret = -EOPNOTSUPP;
++		goto out_unlock;
++	}
+ 	dma_block->block.bytes_used = block->bytes_used;
+ 	dma_block->block.flags = block->flags;
+ 
+@@ -938,6 +980,10 @@ int iio_dma_buffer_enqueue_block(struct iio_buffer *buffer,
+ 		goto out_unlock;
+ 	}
+ 
++	if (dma_block->rx_page)
++		dma_sync_single_for_device(queue->dev, dma_block->phys_addr,
++					   PAGE_ALIGN(dma_block->block.size),
++					   DMA_FROM_DEVICE);
+ 	iio_dma_buffer_enqueue(queue, dma_block);
+ 
+ out_unlock:
+@@ -977,6 +1023,10 @@ int iio_dma_buffer_dequeue_block(struct iio_buffer *buffer,
+ 		goto out_unlock;
+ 	}
+ 
++	if (dma_block->rx_page)
++		dma_sync_single_for_cpu(queue->dev, dma_block->phys_addr,
++					PAGE_ALIGN(dma_block->block.size),
++					DMA_FROM_DEVICE);
+ 	*block = dma_block->block;
+ 
+ out_unlock:
+@@ -1029,11 +1079,27 @@ int iio_dma_buffer_mmap(struct iio_buffer *buffer,
+ 	vma->vm_pgoff = 0;
+ 
+ 	vm_flags_set(vma, VM_DONTEXPAND | VM_DONTDUMP);
++	if (block->rx_page) {
++		unsigned long addr;
++		int ret;
++
++		if (!(vma->vm_flags & VM_SHARED))
++			return -EINVAL;
++		for (addr = vma->vm_start; addr < vma->vm_end; addr += PAGE_SIZE) {
++			ret = vm_insert_page(vma, addr, block->rx_page +
++					     ((addr - vma->vm_start) >> PAGE_SHIFT));
++			if (ret)
++				return ret;
++		}
++	}
+ 	vma->vm_ops = &iio_dma_buffer_vm_ops;
+ 	vma->vm_private_data = block;
+ 
+ 	vma->vm_ops->open(vma);
+ 
++	if (block->rx_page)
++		return 0;
++
+ 	return dma_mmap_coherent(queue->dev, vma, block->vaddr,
+ 		block->phys_addr, vma->vm_end - vma->vm_start);
+ }
+diff --git a/include/linux/iio/buffer-dma.h b/include/linux/iio/buffer-dma.h
+index 9bee923ca..a14986949 100644
+--- a/include/linux/iio/buffer-dma.h
++++ b/include/linux/iio/buffer-dma.h
+@@ -20,6 +20,7 @@ struct device;
+ struct dma_buf_attachment;
+ struct dma_fence;
+ struct sg_table;
++struct page;
+ 
+ /**
+  * enum iio_block_state - State of a struct iio_dma_buffer_block
+@@ -48,6 +49,7 @@ enum iio_block_state {
+  * @queue: Parent DMA buffer queue
+  * @kref: kref used to manage the lifetime of block
+  * @state: Current state of the block
++ * @rx_page: Experimental legacy RX compound allocation, NULL for coherent DMA
+  * @cyclic: True if this is a cyclic buffer
+  * @fileio: True if this buffer is used for fileio mode
+  * @sg_table: DMA table for the transfer when transferring a DMABUF
+@@ -59,6 +61,7 @@ struct iio_dma_buffer_block {
+ 	size_t bytes_used;
+ #ifdef CONFIG_IIO_DMA_BUF_MMAP_LEGACY
+ 	struct iio_buffer_block block;
++	struct page *rx_page;
+ #endif
+ 
+ 	/*

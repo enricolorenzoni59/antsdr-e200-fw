@@ -1,0 +1,121 @@
+--- a/iiod/ops.h
++++ b/iiod/ops.h
+@@ -21,6 +21,7 @@
+ 
+ #include "iio-config.h"
+ #include "queue.h"
++#include "e200-zerocopy.h"
+ 
+ #if WITH_AIO
+ #include <libaio.h>
+@@ -94,6 +95,7 @@
+ };
+ 
+ struct parser_pdata {
++	struct e200_zc *e200_zc;
+ 	struct iio_context *ctx;
+ 	bool stop, binary;
+ 	int fd_in, fd_out;
+--- a/iiod/rw.c
++++ b/iiod/rw.c
+@@ -11,6 +11,9 @@
+ ssize_t write_all(struct parser_pdata *pdata, const void *src, size_t len)
+ {
+ 	uintptr_t ptr = (uintptr_t)src;
++
++	if (pdata->e200_zc && len >= 16384)
++		return e200_zc_write(pdata->e200_zc, src, len);
+ 
+ 	while (len) {
+ 		ssize_t ret = pdata->writefd(pdata, (void *)ptr, len);
+--- a/iiod/interpreter.c
++++ b/iiod/interpreter.c
+@@ -17,6 +17,7 @@
+ #include <sys/eventfd.h>
+ #endif
+ #include <sys/socket.h>
++#include <stdlib.h>
+ 
+ #if WITH_AIO
+ static ssize_t async_io(struct parser_pdata *pdata, void *buf, size_t len, bool do_read)
+@@ -132,8 +133,11 @@
+ 		/* Got STOP event, or client closed the socket: treat it as EOF */
+ 		if (pfd[1].revents & POLLIN || pfd[0].revents & POLLRDHUP)
+ 			return 0;
+-		if (pfd[0].revents & POLLERR)
+-			return -EIO;
++		if (pfd[0].revents & POLLERR) {
++			int err = pdata->e200_zc ? e200_zc_reap(pdata->e200_zc) : -EIO;
++			if (err)
++				return err;
++		}
+ 		if (!(pfd[0].revents & POLLIN))
+ 			continue;
+ 
+@@ -244,11 +248,21 @@
+ 	pdata.writefd = writefd_io;
+ #endif
+ 
++	if (!WITH_AIO && is_socket && getenv("E200_ZEROCOPY") &&
++	    !strcmp(getenv("E200_ZEROCOPY"), "sync")) {
++		pdata.e200_zc = e200_zc_open(fd_out);
++		if (!pdata.e200_zc) {
++			IIO_ERROR("E200 zerocopy setup failed: %d\n", errno);
++			return;
++		}
++	}
++
+ 	if (WITH_IIOD_V0_COMPAT)
+ 		ascii_interpreter(&pdata);
+ 
+ 	if (pdata.binary)
+ 		binary_parse(&pdata);
++	e200_zc_close(pdata.e200_zc);
+ 
+ #if WITH_AIO
+ err_free_aio:
+--- a/iiod/CMakeLists.txt
++++ b/iiod/CMakeLists.txt
+@@ -5,7 +5,7 @@
+ check_pthread_set_name(HAS_PTHREAD_SETNAME_NP)
+ 
+ add_executable(iiod iiod.c interpreter.c responder.c rw.c thread-pool.c
+-                    xml-zstd.c)
++                    xml-zstd.c e200-zerocopy.c tcp-transport.c)
+ set_target_properties(
+     iiod
+     PROPERTIES C_STANDARD 99
+--- a/iiod/tcp-transport.c
++++ b/iiod/tcp-transport.c
+@@ -183,6 +183,16 @@
+         ssize_t n = send(t->fd, (const char *)data + offset, size - offset,
+                          MSG_NOSIGNAL | (t->zc ? MSG_ZEROCOPY : 0));
+         if (n < 0 && errno == EINTR) continue;
++        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
++            struct pollfd p = {.fd = t->fd, .events = POLLOUT};
++            int r = drain(t, false);
++            if (r) return r;
++            do { r = poll(&p, 1, 100); } while (r < 0 && errno == EINTR);
++            if (r < 0) return -errno;
++            if (p.revents & (POLLHUP | POLLNVAL)) return -EPIPE;
++            if (monotonic() > deadline) return -ETIMEDOUT;
++            continue;
++        }
+         if (n <= 0) return -(n < 0 ? errno : EIO);
+         offset += n; t->stats.bytes += n; t->stats.calls++;
+         if (t->zc) {
+--- a/iiod/responder.c
++++ b/iiod/responder.c
+@@ -362,2 +362,12 @@
+ 	intptr_t ret;
++	struct buffer_entry *buffer = priv;
++
++	/* A peer can request reuse before the writer receives the final TCP
++	 * completion. Wait for the previous dequeue/response to finish first.
++	 * The reusable token starts done; this also handles the first enqueue. */
++	if (buffer->pdata->e200_zc) {
++		ret = iio_task_cancel_sync(entry->dequeue_token, -1);
++		if (ret)
++			goto out_send_response;
++	}
+ 

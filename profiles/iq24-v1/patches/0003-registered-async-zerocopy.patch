@@ -1,0 +1,133 @@
+--- a/iiod/ops.h
++++ b/iiod/ops.h
+@@ -58,6 +58,7 @@
+ extern struct iio_mutex *evlist_lock;
+ 
+ struct block_entry {
++	struct e200_zc *e200_zc;
+ 	SLIST_ENTRY(block_entry) entry;
+ 	struct iio_block *block;
+ 	struct iiod_io *io;
+--- a/iiod/rw.c
++++ b/iiod/rw.c
+@@ -12,7 +12,7 @@
+ {
+ 	uintptr_t ptr = (uintptr_t)src;
+ 
+-	if (pdata->e200_zc && len >= 16384)
++	if (e200_zc_eligible(pdata->e200_zc, src, len))
+ 		return e200_zc_write(pdata->e200_zc, src, len);
+ 
+ 	while (len) {
+--- a/iiod/interpreter.c
++++ b/iiod/interpreter.c
+@@ -176,8 +176,11 @@
+ 		/* Got STOP event, or client closed the socket: treat it as EOF */
+ 		if (pfd[1].revents & POLLIN || pfd[0].revents & POLLHUP)
+ 			return 0;
+-		if (pfd[0].revents & POLLERR)
+-			return -EIO;
++		if (pfd[0].revents & POLLERR) {
++			int err = pdata->e200_zc ? e200_zc_reap(pdata->e200_zc) : -EIO;
++			if (err)
++				return err;
++		}
+ 		if (!(pfd[0].revents & POLLOUT))
+ 			continue;
+ 
+@@ -249,7 +252,8 @@
+ #endif
+ 
+ 	if (!WITH_AIO && is_socket && getenv("E200_ZEROCOPY") &&
+-	    !strcmp(getenv("E200_ZEROCOPY"), "sync")) {
++	    (!strcmp(getenv("E200_ZEROCOPY"), "sync") ||
++	     !strcmp(getenv("E200_ZEROCOPY"), "async"))) {
+ 		pdata.e200_zc = e200_zc_open(fd_out);
+ 		if (!pdata.e200_zc) {
+ 			IIO_ERROR("E200 zerocopy setup failed: %d\n", errno);
+--- a/iiod/responder.c
++++ b/iiod/responder.c
+@@ -48,6 +48,7 @@
+ {
+ 	iiod_io_cancel(entry->io);
+ 	iiod_io_unref(entry->io);
++	e200_zc_unregister(entry->e200_zc, iio_block_start(entry->block));
+ 	iio_block_destroy(entry->block);
+ 	iio_task_token_destroy(entry->enqueue_token);
+ 	iio_task_token_destroy(entry->dequeue_token);
+@@ -370,6 +371,9 @@
+ 		ret = iio_task_cancel_sync(entry->dequeue_token, -1);
+ 		if (ret)
+ 			goto out_send_response;
++		ret = e200_zc_wait(entry->e200_zc, iio_block_start(entry->block));
++		if (ret)
++			goto out_send_response;
+ 	}
+ 
+ 	ret = e200_pin("E200_DMA_CPU");
+@@ -790,6 +794,16 @@
+ 				entry->dmabuf_fd = -ENOSYS;
+ 			}
+ 		}
++	}
++
++	if (pdata->e200_zc && !buf_entry->is_tx) {
++		ret = e200_zc_register(pdata->e200_zc, iio_block_start(block),
++			(size_t)((char *)iio_block_end(block) - (char *)iio_block_start(block)), true);
++		if (ret) {
++			iio_task_token_destroy(entry->dequeue_token);
++			goto out_destroy_token;
++		}
++		entry->e200_zc = pdata->e200_zc;
+ 	}
+ 
+ 	/* Keep a reference to the iiod_io until the block is freed. */
+--- a/iiod/ops.c
++++ b/iiod/ops.c
+@@ -264,6 +264,14 @@
+ 	if (!demux) {
+ 		/* Short path */
+ 		start = iio_block_start(block);
++		if (pdata->e200_zc) {
++			int err = e200_zc_register(pdata->e200_zc, start, len, false);
++			if (err)
++				return err;
++			ret = write_all(pdata, start, len);
++			err = e200_zc_unregister(pdata->e200_zc, start);
++			return ret < 0 ? ret : (err ? err : ret);
++		}
+ 		return write_all(pdata, start, len);
+ 	} else {
+ 		struct sample_cb_info info = {
+--- a/iiod/tcp-transport.h
++++ b/iiod/tcp-transport.h
+@@ -23,6 +23,7 @@
+ /* Single-owner primitives for the threaded pipeline. Borrowed buffer storage
+  * must not change until this slot has no pending completions. */
+ int tcp_transport_reap(struct tcp_transport *t);
++int tcp_transport_wait_slot(struct tcp_transport *t, unsigned slot);
+ unsigned tcp_transport_slot_pending(const struct tcp_transport *t, unsigned slot);
+ void tcp_copy_samples(void *dst, const void *src, size_t size);
+ #endif
+--- a/iiod/tcp-transport.c
++++ b/iiod/tcp-transport.c
+@@ -208,6 +208,19 @@
+     return t->zc && !t->staging && !t->borrowed ? tcp_transport_finish(t) : 0;
+ }
+ 
++int tcp_transport_wait_slot(struct tcp_transport *t, unsigned slot) {
++    double deadline = monotonic() + 10;
++    if (slot >= t->slots) return -EINVAL;
++    while (t->slot[slot].pending) {
++        int r = drain(t, false);
++        if (r) return r;
++        if (!t->slot[slot].pending) break;
++        r = drain(t, true);
++        if (r) return r;
++        if (monotonic() > deadline) return -ETIMEDOUT;
++    }
++    return 0;
++}
+ int tcp_transport_reap(struct tcp_transport *t) { return drain(t, false); }
+ unsigned tcp_transport_slot_pending(const struct tcp_transport *t, unsigned slot) { return t->slot[slot].pending; }
+ 
