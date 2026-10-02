@@ -84,6 +84,43 @@ TX, dual RX and QSPI flashing are outside the initial release scope.
 Development defaults: **192.168.1.10**, SSH **root/analog**, unauthenticated IIO.
 Use a trusted receiver LAN and preserve the original recovery card.
 
+## How to change the IP
+
+Edit `board/antsdr-e200/rootfs-overlay/etc/network/interfaces`.
+For a **static IP**, use the following, replacing the address and netmask for
+your network (optionally add `gateway YOUR_GATEWAY_IP`):
+
+```text
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet static
+    address 192.168.1.20
+    netmask 255.255.255.0
+```
+
+For **DHCP**, replace the file contents with:
+
+```text
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+```
+
+DHCP requires a server on the connected network; there is no configured static
+fallback. Find the assigned address in your router's leases or through UART
+with `ip -4 addr show dev eth0`.
+
+Make the change in a fresh checkout/build tree, run `./build.sh` successfully,
+then write the **new** `build/image.raw` to the whole microSD and reboot from it.
+Editing `/etc/network/interfaces` on the running E200 is temporary because the
+rootfs lives in RAM. A failed rebuild can leave an old image on disk.
+The `profile/rootfs/` path used by `antsdr-e200-stream1090` is not read by
+this repository.
+
 [Clients](docs/clients.md) · [Build details](docs/release-build.md) ·
 [Qualification](docs/release-status.md) · [Recovery](docs/recovery.md) ·
 [Licensing](docs/licensing.md)
