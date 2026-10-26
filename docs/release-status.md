@@ -1,6 +1,14 @@
 # Qualification status
 
-Developer preview. The repository remains private during publication review.
+Developer preview. The current candidate migrates all firmware libraries and
+tools to native libiio 1.0.0, without the v0 ABI shim. It retains v0 network
+protocol support. Full ARM image build and hardware qualification of this
+candidate are pending; see [migration status](libiio-migration.md).
+
+## Historical mixed-runtime image
+
+The checks below apply to the exact pre-migration image identified here. They
+do not qualify the new libad9361 build, local tools or consolidated runtime.
 
 | Check | Status |
 | --- | --- |

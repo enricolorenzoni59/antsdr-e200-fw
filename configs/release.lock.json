@@ -3,6 +3,8 @@
   "profile": "e200-single-rx",
   "target_version": "0.1.0-rc1",
   "status": "developer-preview",
+  "runtime_layout": "native-libiio-1",
+  "hardware_qualification": "pending for the native-IIO migration",
   "kernel": {
     "version": "6.12.111",
     "compiler": "GCC 15",
@@ -20,7 +22,10 @@
     "version": "1.0.0",
     "patches": "profiles/iq24-v1/patches",
     "runtime": "profiles/iq24-consolidated/iiod.default",
-    "original_026_retained": true
+    "original_026_retained": false,
+    "library_path": "/usr/lib",
+    "v0_abi_shim": false,
+    "v0_network_protocol": true
   },
   "boot": {
     "source_lock": "vendor-v039-artifacts.json",

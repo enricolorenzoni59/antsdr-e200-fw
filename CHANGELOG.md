@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Migrate all firmware libraries and local tools to native libiio 1.0.0, with
+  the pinned upstream libad9361 v1 API port. Keep legacy network clients working.
+- Remove the old libiio ABI shim, retained 0.26 daemon and private runtime path.
+  Reject legacy artifacts and ELF dependencies during userspace/image checks.
+- Compile the patched native IIO stack in Linux CI. Full ARM build and fresh
+  E200 hardware qualification remain pending for the migrated image.
 - Default to `./build.sh` and publish the verified microSD image as `build/image.raw`.
 - Remove laboratory archives, alternate build entry points and unrelated experiments.
 
