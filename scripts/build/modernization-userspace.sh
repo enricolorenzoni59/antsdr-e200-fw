@@ -23,7 +23,7 @@ if [ "$stage" = prepare ]; then
     [ "$(git -C "$source" rev-parse HEAD)" = d5180309b1b66ef3b8eaccca70ad69be8e0729a1 ]
     [ "$(git -C /baseline/modern-buildroot rev-parse HEAD)" = 2e2994de5213abfa63ab5cf5f9291bf62b53d094 ]
     cp -a /baseline/modern-br2-external "$external"
-    # Keep the radio stack fixed. The default also preserves the original SDK;
+    # Keep the native radio recipes fixed. The default preserves the SDK;
     # the explicit 15.2 experiment uses the pinned Buildroot Arm GNU recipe.
     recipes=package/libiio
     if [ "$toolchain" = 14.2 ]; then
@@ -36,6 +36,7 @@ if [ "$stage" = prepare ]; then
         rm -rf "$source/$recipe"
         cp -a "/baseline/modern-buildroot/$recipe" "$source/$recipe"
     done
+    python3 "$project/scripts/build/install-native-iio-recipes.py" "$source" "$external"
     printf '%s\n' "$toolchain" > /work/evidence/userspace-toolchain-selection.txt
     printf '%s\n' "$profile" > /work/evidence/userspace-profile-selection.txt
     cp "$project/profiles/iq24/buildroot_defconfig" /work/candidate_defconfig
