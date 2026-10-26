@@ -19,7 +19,7 @@ def main():
     overlay = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(overlay)
     pins = {name: hashlib.sha256(((bash if name.startswith('rootfs.') else stage) / name).read_bytes()).hexdigest()
-            for name in overlay.PINS}
+            for name in overlay.INPUT_NAMES}
     output.mkdir(exist_ok=True)
     pinfile = output / 'new-build-inputs.json'
     pinfile.write_text(json.dumps(pins, indent=2) + '\n')
@@ -33,7 +33,7 @@ def main():
         '--boot-bin', work / 'vendor/BOOT.BIN', '--tools', '/usr/bin', '--dtc', '/usr/bin/dtc',
         '--profile', 'iq24', '--output', output / 'sd')
     manifest = {'status': 'BUILT; HARDWARE UNTESTED; REDISTRIBUTION REVIEW PENDING',
-                'historical_rootfs_inputs_match': pins == overlay.PINS,
+                'iio_runtime': 'native libiio 1.0; no v0 ABI shim',
                 'vendor_boot': 'official v0.39; differs from historical lab-built BOOT.BIN',
                 'locks': {}, 'source_files': {}}
     for folder in ('configs', 'patches', 'profiles', 'board', 'scripts', 'containers', 'tests'):

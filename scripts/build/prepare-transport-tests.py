@@ -53,4 +53,5 @@ if not ready.exists():
 subprocess.run(['cmake', '-S', str(source), '-B', str(source.parent / 'libiio1-build'),
                 '-DWITH_USB_BACKEND=OFF', '-DWITH_SERIAL_BACKEND=OFF', '-DWITH_IIOD_USBD=OFF',
                 '-DWITH_IIOD_SERIAL=OFF', '-DWITH_AIO=OFF', '-DWITH_DOC=OFF',
+                '-DLIBIIO_COMPAT=OFF', '-DWITH_IIOD_V0_COMPAT=ON',
                 '-DPYTHON_BINDINGS=OFF', '-DCSHARP_BINDINGS=OFF', '-DHAVE_DNS_SD=OFF'], check=True)
