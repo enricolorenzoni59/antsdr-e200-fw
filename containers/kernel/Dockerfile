@@ -1,14 +1,14 @@
 # Kernel-only builder: immutable base, dated package archive and verified compiler.
 FROM ubuntu@sha256:da6fc2be547864451aa253836dd926da33623312df4a9a243e35dc877c378a78
 # Bootstrap HTTPS trust from a versioned package authenticated by Ubuntu APT metadata.
-ADD https://archive.ubuntu.com/ubuntu/pool/main/c/ca-certificates/ca-certificates_20260601~22.04.1_all.deb /tmp/ca-certificates.deb
+ARG UBUNTU_SNAPSHOT=20260923T000000Z
+ADD https://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT}/pool/main/c/ca-certificates/ca-certificates_20260601~22.04.1_all.deb /tmp/ca-certificates.deb
 RUN echo '6e8cdcc8c86103acd4fc14649eac62ff2037108389074a7b167567af33c32245  /tmp/ca-certificates.deb' | sha256sum -c - \
     && dpkg-deb -x /tmp/ca-certificates.deb /tmp/ca-bootstrap \
     && mkdir -p /etc/ssl/certs \
     && cat /tmp/ca-bootstrap/usr/share/ca-certificates/mozilla/*.crt > /etc/ssl/certs/ca-certificates.crt \
     && printf 'Acquire::https::CaInfo "/etc/ssl/certs/ca-certificates.crt";\n' > /etc/apt/apt.conf.d/99e200-ca-bootstrap \
     && rm -rf /tmp/ca-bootstrap /tmp/ca-certificates.deb
-ARG UBUNTU_SNAPSHOT=20260923T000000Z
 ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8 TZ=UTC
 RUN rm -f /etc/apt/sources.list.d/ubuntu.sources \
     && printf 'deb https://snapshot.ubuntu.com/ubuntu/%s resolute main universe\ndeb https://snapshot.ubuntu.com/ubuntu/%s resolute-updates main universe\ndeb https://snapshot.ubuntu.com/ubuntu/%s resolute-security main universe\n' \
