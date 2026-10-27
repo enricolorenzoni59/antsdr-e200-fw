@@ -114,3 +114,12 @@ Raw UART transcripts, image backups, helper sources and JSON results are retaine
 locally under `work/qualification/native-v1/`; device identifiers and host keys
 are not included in this public record. The VM build directory preserves the
 full build log and input/output manifests.
+
+Subsequent [SSH stress experiments](ssh-rx-investigation-2026-10-27.md) rejected
+priority/affinity presets and a separate 4 MiB DMA candidate. They do not change
+the scope of the image-specific measurements above.
+
+After restoration of this exact image, an additional 600.000186-second native
+RX capture passed at 23.998402 MS/s, with 19 light diagnostics over an SSH
+connection authenticated before RX and no detected DMA overflow after startup.
+The investigation report documents the workload and persistent-connection recipe.

@@ -74,9 +74,11 @@ replacements. [Pinned sources and comparison details](docs/firmware-comparison.m
 The native-IIO image sustained **24 MS/s, single RX, I16/Q16** for 10 minutes per
 client, without detected DMA overflow after the first startup second. Client
 pause/kill/reconnection recovery passed for both libraries. Opening a new SSH
-session during capture reproduced DMA overflow; two diagnostic commands over a
-connection established beforehand passed a 90-second native RX test.
+session during capture reproduced DMA overflow with both clients. Light
+commands over a connection established beforehand passed a ten-minute native RX
+test with 19 timed diagnostics (23.998402 MS/s, no detected DMA overflow).
 Connect before capture; other concurrent workloads remain unqualified.
+[SSH investigation and rejected tuning candidates](docs/ssh-rx-investigation-2026-10-27.md).
 Use 32 kernel buffers:
 native libiio 1.0 requests **262,144 samples (1 MiB)**; legacy 0.26 requests
 **2,097,152 samples (8 MiB)**. Legacy 1 MiB requests overflowed at that rate.

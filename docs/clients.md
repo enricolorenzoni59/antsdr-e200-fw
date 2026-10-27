@@ -33,10 +33,34 @@ The board self-test now uses `iio_rwdev -u local:` for bounded receive checks.
 The old `iio_readdev` and `iio_writedev` commands are not installed.
 
 Complete SSH login before starting a 24 MS/s capture. Opening new SSH sessions
-during native RX reproduced DMA overflow. A connection established beforehand
-passed a 90-second native RX comparison with two timed diagnostic commands.
+during native and legacy RX reproduced DMA overflow. A connection established
+beforehand passed a ten-minute native RX test with 19 timed diagnostic commands
+at 23.998402 MS/s, without detected DMA overflow.
 Heavy commands and arbitrary mixed workloads remain unqualified. See
 [the native-image qualification record](native-iio-validation-2026-10-27.md)
 for the exact image and results. The older mixed-runtime image also passed a
 separate ten-minute test with 19 diagnostic commands, recorded in
 [historical results](release-status.md).
+
+Nice/CPU-affinity and realtime trials did not establish a reliable fix. The
+4 MiB DMA experiment was also rejected; see the
+[SSH stress investigation](ssh-rx-investigation-2026-10-27.md).
+
+Reuse a persistent SSH connection so a diagnostic cannot silently create a new
+TCP connection when the master has expired. Establish and check it before RX:
+
+```sh
+ssh -M -S /tmp/e200-ssh-control -o ControlPersist=7200 -fN root@192.168.1.10
+ssh -S /tmp/e200-ssh-control -O check root@192.168.1.10
+```
+
+During capture, the following reuses the existing connection and fails if it is
+unavailable; `ProxyCommand=false` prevents a fresh-connection fallback:
+
+```sh
+ssh -S /tmp/e200-ssh-control -o ProxyCommand=false -o BatchMode=yes root@192.168.1.10 uname -r
+```
+
+Close it after capture with `ssh -S /tmp/e200-ssh-control -O exit root@192.168.1.10`.
+This avoids a new handshake; it does not reserve CPU time or make heavy remote
+commands safe during RX.
