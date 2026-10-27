@@ -26,6 +26,12 @@ fresh-SSH overflow. A separately built 4 MiB DMA candidate lost baseline
 throughput and was rejected. Both candidates were reverted; the restored image
 and measurements are recorded in the [investigation report](ssh-rx-investigation-2026-10-27.md).
 
+Subsequent [connection-phase tests](ssh-handshake-validation-2026-10-27.md)
+reproduced overflow before password submission and before disconnect. Public-key
+authentication, Curve25519 and an optimized Dropbear build did not fix it.
+A ten-minute 22 MS/s test failed at 460.823 s despite a 60-second pass.
+The firmware was unchanged throughout these tests.
+
 ## Historical mixed-runtime image
 
 The checks below apply to the exact pre-migration image identified here. They

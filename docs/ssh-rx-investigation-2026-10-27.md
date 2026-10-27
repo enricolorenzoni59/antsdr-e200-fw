@@ -135,3 +135,8 @@ keep concurrent work within the previously measured scope. The tests do not
 identify a single root cause. A further fix needs measurements of DMA/IRQ latency
 and transport stalls during authentication, rather than another unverified
 priority preset. TX, dual RX and arbitrary shell workloads remain unqualified.
+
+Further [connection-phase tests](ssh-handshake-validation-2026-10-27.md) rejected
+key-exchange/authentication changes and a separately compiled optimized Dropbear.
+They reproduced overflow before password submission and before scheduled
+disconnect. A ten-minute 22 MS/s test also failed despite a short pass.

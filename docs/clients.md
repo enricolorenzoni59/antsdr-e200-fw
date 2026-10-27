@@ -64,3 +64,10 @@ ssh -S /tmp/e200-ssh-control -o ProxyCommand=false -o BatchMode=yes root@192.168
 Close it after capture with `ssh -S /tmp/e200-ssh-control -O exit root@192.168.1.10`.
 This avoids a new handshake; it does not reserve CPU time or make heavy remote
 commands safe during RX.
+
+Opening a new master during RX is also unqualified: the subsequent
+[connection-phase investigation](ssh-handshake-validation-2026-10-27.md)
+reproduced overflow while keeping all new masters alive. Changing SSH key
+exchange, selecting public-key authentication or lowering the sample rate to
+22 MS/s did not establish a reliable fix. The 20 MS/s result was only a
+60-second comparison and does not qualify long concurrent workloads.
