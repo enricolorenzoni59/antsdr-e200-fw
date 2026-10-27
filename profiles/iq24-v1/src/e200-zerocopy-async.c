@@ -10,8 +10,8 @@
 #include <string.h>
 #include <sys/socket.h>
 
-#define E200_SLOTS 32
-#define E200_BLOCK_BYTES 4194304
+#define E200_SLOTS 64
+#define E200_BLOCK_BYTES 1048576
 struct payload { const void *ptr; size_t size; bool native; };
 struct e200_zc {
     struct tcp_transport *transport;

@@ -18,7 +18,7 @@ struct tcp_transport {
 static struct tcp_transport *mock;
 struct tcp_transport *tcp_transport_create(int fd, const char *mode, size_t size, unsigned slots)
 {
-    assert(!strcmp(mode, "borrowed-zerocopy") && size == 4194304 && slots == 32);
+    assert(!strcmp(mode, "borrowed-zerocopy") && size == 1048576 && slots == 64);
     mock = calloc(1, sizeof(*mock));
     assert(mock);
     mock->slots = slots;
@@ -60,52 +60,48 @@ int main(void)
     setenv("E200_ZEROCOPY", "async", 1);
     zc = e200_zc_open(-1);
     assert(zc);
-    assert(!e200_zc_eligible(zc, &identities[0], 4194304));
-    assert(e200_zc_register(zc, &identities[0], 4194305, true) == -EINVAL);
-    for (i = 0; i < 32; i++)
-        assert(!e200_zc_register(zc, &identities[i], 4194304, true));
-    assert(e200_zc_register(zc, &identities[32], 4194304, true) == -ENOSPC);
-    assert(e200_zc_register(zc, &identities[0], 4194304, true) == -EEXIST);
+    assert(!e200_zc_eligible(zc, &identities[0], 1048576));
+    assert(e200_zc_register(zc, &identities[0], 1048577, true) == -EINVAL);
+    for (i = 0; i < 64; i++)
+        assert(!e200_zc_register(zc, &identities[i], 1048576, true));
+    assert(e200_zc_register(zc, &identities[64], 1048576, true) == -ENOSPC);
+    assert(e200_zc_register(zc, &identities[0], 1048576, true) == -EEXIST);
     assert(!e200_zc_eligible(zc, &identities[0], 100));
-    assert(!e200_zc_eligible(zc, &identities[0], 4194305));
-    assert(e200_zc_write(zc, &identities[0], 4194304) == 4194304);
-    assert(e200_zc_write(zc, &identities[1], 4194304) == 4194304);
+    assert(!e200_zc_eligible(zc, &identities[0], 1048577));
+    assert(e200_zc_write(zc, &identities[0], 1048576) == 1048576);
+    assert(e200_zc_write(zc, &identities[1], 1048576) == 1048576);
     assert(mock->stats.pending == 4); /* write returns while pages are retained */
     assert(!e200_zc_wait(zc, &identities[0]));
     assert(mock->pending[0] == 0 && mock->pending[1] == 2);
     assert(!e200_zc_unregister(zc, &identities[1]));
     assert(mock->stats.pending == 0);
-    assert(!e200_zc_eligible(zc, &identities[1], 4194304));
-    assert(!e200_zc_register(zc, &identities[1], 4194304, true));
+    assert(!e200_zc_eligible(zc, &identities[1], 1048576));
+    assert(!e200_zc_register(zc, &identities[1], 1048576, true));
     for (i = 0; i < 200; i++) {
-        const void *ptr = &identities[i % 32];
-        assert(e200_zc_write(zc, ptr, 4194304) == 4194304);
+        const void *ptr = &identities[i % 64];
+        assert(e200_zc_write(zc, ptr, 1048576) == 1048576);
         assert(!e200_zc_wait(zc, ptr));
     }
     assert(mock->stats.pending == 0);
-    for (i = 0; i < 32; i++)
+    for (i = 0; i < 64; i++)
         assert(!e200_zc_unregister(zc, &identities[i]));
-    /* Smaller native blocks remain supported by the same transport. */
-    assert(!e200_zc_register(zc, &identities[0], 1048576, true));
-    assert(e200_zc_write(zc, &identities[0], 1048576) == 1048576);
-    assert(!e200_zc_unregister(zc, &identities[0]));
     /* Legacy payloads must remain synchronous even in async native mode. */
-    assert(!e200_zc_register(zc, &identities[0], 4194304, false));
-    assert(e200_zc_write(zc, &identities[0], 4194304) == 4194304);
+    assert(!e200_zc_register(zc, &identities[0], 1048576, false));
+    assert(e200_zc_write(zc, &identities[0], 1048576) == 1048576);
     assert(mock->stats.pending == 0);
     assert(!e200_zc_unregister(zc, &identities[0]));
     /* Failed completion shuts down the connection and prohibits more sends. */
-    assert(!e200_zc_register(zc, &identities[0], 4194304, true));
-    assert(e200_zc_write(zc, &identities[0], 4194304) == 4194304);
+    assert(!e200_zc_register(zc, &identities[0], 1048576, true));
+    assert(e200_zc_write(zc, &identities[0], 1048576) == 1048576);
     mock->error = -ECONNRESET;
     assert(e200_zc_wait(zc, &identities[0]) == -ECONNRESET);
-    assert(e200_zc_write(zc, &identities[0], 4194304) == -ECONNRESET);
+    assert(e200_zc_write(zc, &identities[0], 1048576) == -ECONNRESET);
     assert(e200_zc_unregister(zc, &identities[0]) == -ECONNRESET);
     e200_zc_close(zc);
     setenv("E200_ZEROCOPY", "sync", 1);
     zc = e200_zc_open(-1);
-    assert(zc && !e200_zc_register(zc, &identities[0], 4194304, true));
-    assert(e200_zc_write(zc, &identities[0], 4194304) == 4194304);
+    assert(zc && !e200_zc_register(zc, &identities[0], 1048576, true));
+    assert(e200_zc_write(zc, &identities[0], 1048576) == 1048576);
     assert(mock->stats.pending == 0);
     assert(!e200_zc_unregister(zc, &identities[0]));
     e200_zc_close(zc);

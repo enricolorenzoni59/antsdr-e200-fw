@@ -8,7 +8,7 @@ Upstream-status: local experiment; NOT submitted or production qualified.
 Reason-local: evaluate eliminating DMA-to-socket copies on Zynq E200.
 
 Disabled by default. Enable industrialio_buffer_dma.cached_rx=1 at RAM boot.
-RX only; noncyclic, <=4 MiB blocks, bounded physically contiguous allocations.
+RX only; noncyclic, <=1 MiB blocks, bounded physically contiguous allocations.
 Compound page references protect allocation lifetime; explicit streaming DMA
 synchronization transfers ownership at enqueue/dequeue. The application must
 wait for every TCP completion before returning a block to IIO. No support for
@@ -37,7 +37,7 @@ index a85eec3f3..d65c6fd8d 100644
 + */
 +static bool cached_rx;
 +module_param(cached_rx, bool, 0400);
-+MODULE_PARM_DESC(cached_rx, "Experimental page-backed legacy RX buffers (<=4 MiB)");
++MODULE_PARM_DESC(cached_rx, "Experimental page-backed legacy RX buffers (<=1 MiB)");
  #endif
  
  static void iio_buffer_block_release(struct kref *kref)
@@ -72,7 +72,7 @@ index a85eec3f3..d65c6fd8d 100644
 +		/* Compound pages are required by vm_insert_page for a higher-order
 +		 * allocation. Do not expose coherent PFNMAP memory as ordinary RAM.
 +		 */
-+		if (size > SZ_4M)
++		if (size > SZ_1M)
 +			goto err_free;
 +		block->rx_page = alloc_pages(GFP_KERNEL | __GFP_ZERO | __GFP_COMP,
 +					     get_order(size));

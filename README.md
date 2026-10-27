@@ -6,9 +6,6 @@ Docker build that assembles a complete microSD image. Independent community proj
 **Developer preview:** this candidate uses native **libiio 1.0.0 throughout the
 firmware**, including local tools and libad9361. Legacy network clients remain
 supported; the old library, ABI shim and recovery daemon are removed.
-The current branch experiments with 4 MiB DMA blocks to investigate SSH-related
-RX overflow. This new kernel/transport candidate requires separate hardware
-validation. The completed results below apply to commit `8c9e790` and its image.
 The migrated image passed a full ARM build, SD write/readback, automatic warm
 boot, local self-tests and 10-minute single-RX tests at 24 MS/s with both clients.
 Physical cold boot of this image remains pending. New SSH sessions during RX

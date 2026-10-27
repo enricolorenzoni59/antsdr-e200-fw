@@ -24,7 +24,7 @@
 +
  			/* Keep legacy READBUF framing; aggregate large requests from
 -			 * bounded DMA blocks using the existing rw loop. RX1 only. */
-+			 * 4 MiB DMA blocks using the existing rw loop. Checked RX layouts. */
++			 * 1 MiB DMA blocks using the existing rw loop. Checked RX layouts. */
  			if (getenv("E200_LEGACY_AGGREGATE") &&
  			    !strcmp(getenv("E200_LEGACY_AGGREGATE"), "1") &&
  			    !is_output && iio_device_get_name(dev) &&
@@ -53,7 +53,7 @@
  					if (ret) break;
  				}
 -				IIO_INFO("E200 legacy upstream-task prefetch enabled\n");
-+				IIO_INFO("E200 legacy upstream-task prefetch enabled: %u frames, 4194304 bytes\n", e200_frames);
++				IIO_INFO("E200 legacy upstream-task prefetch enabled: %u frames, 1048576 bytes\n", e200_frames);
  			}
  
  			/* Signal the threads that we opened the device */

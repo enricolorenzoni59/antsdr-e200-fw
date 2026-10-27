@@ -4,7 +4,7 @@
 #include <string.h>
 #include <iio/iio.h>
 
-/* Return frames per 4 MiB DMA block only for complete RX1 or RX1+RX2 I/Q.
+/* Return frames per 1 MiB DMA block only for complete RX1 or RX1+RX2 I/Q.
  * Reject mixed/partial masks and unexpected formats rather than inferring
  * channel identity from byte stride alone. Payload bytes are never changed. */
 static unsigned int e200_rx_block_frames(const struct iio_device *dev,
@@ -39,6 +39,6 @@ static unsigned int e200_rx_block_frames(const struct iio_device *dev,
     }
     if ((stride == 4 && seen != 3) || (stride == 8 && seen != 15))
         return 0;
-    return 4194304U / (unsigned int)stride;
+    return 1048576U / (unsigned int)stride;
 }
 #endif
