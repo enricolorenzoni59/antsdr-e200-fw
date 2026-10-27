@@ -2,8 +2,21 @@
 
 Developer preview. The current candidate migrates all firmware libraries and
 tools to native libiio 1.0.0, without the v0 ABI shim. It retains v0 network
-protocol support. Full ARM image build and hardware qualification of this
-candidate are pending; see [migration status](libiio-migration.md).
+protocol support.
+
+## Native-IIO image (2026-10-27)
+
+Commit `8c9e7901c2587b5933db4ad55ce50bc5399402ef` completed a fresh ARM build
+and was installed with verified SD readback. Image SHA256:
+`4c6ec10df862d81f802bcaf9b79f4347a7f7e525c52576adc5808c72dfabf5de`.
+
+Automatic warm boot, all 22 local self-tests, the ARM libad9361 read test,
+10-minute 24 MS/s single-RX captures with each client, and pause/kill/reconnection
+recovery passed. A new SSH connection during RX still caused DMA overflow;
+commands over an existing connection passed a 90-second comparison.
+Physical cold boot remains pending for this image. See the
+[complete native-image record](native-iio-validation-2026-10-27.md) for scope,
+measurements and remaining checks.
 
 ## Historical mixed-runtime image
 

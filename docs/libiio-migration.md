@@ -1,8 +1,10 @@
 # Native libiio 1.0 migration
 
 The candidate builds all IIO libraries and programs against libiio **1.0.0**.
-It is not yet a hardware-qualified firmware image. The previous image's boot,
-rollback and RX results remain historical evidence in [release status](release-status.md).
+The complete ARM image has been built and installed on the E200. Local tests,
+24 MS/s single-RX reception, client recovery and automatic warm boot passed;
+physical cold boot remains pending. See the
+[2026-10-27 hardware record](native-iio-validation-2026-10-27.md).
 
 ## Runtime and source identities
 
@@ -43,7 +45,7 @@ The existing native and legacy transport helpers remain in the daemon.
 See the [upstream API/ABI notes](https://github.com/analogdevicesinc/libiio/releases/tag/v1.0.0)
 and [tool migration guide](https://analogdevicesinc.github.io/libiio/main/tools_migration/).
 
-## Validation on 2026-10-26
+## Validation on 2026-10-26 and 2026-10-27
 
 | Check | Result |
 | --- | --- |
@@ -55,15 +57,15 @@ and [tool migration guide](https://analogdevicesinc.github.io/libiio/main/tools_
 | Linux Python regressions | 35 passed, including real ELF dependency acceptance/rejection |
 | Linux native stack | Patched daemon, v1 CLI/library and pinned libad9361 compiled with the actual recipe options; all 11 installed ELF files passed the ABI check |
 | Transport sanitizers, RX layout and pipeline | Passed in Linux CI |
-| Full ARM Buildroot/SD image | Pending; local host is macOS ARM without Docker |
-| New E200 cold boot, recovery and RX | Pending; no board was accessed |
+| Full ARM Buildroot/SD image | PASS on Linux VM, commit `8c9e790`; 106 final ELF files checked |
+| E200 local tests, warm boot, recovery and RX | PASS on the new image; physical cold boot pending; new-SSH overflow reproduced |
 
-Linux results above are recorded on implementation commit `63c98dc` in
+The earlier Linux regression/native-stack results are recorded on commit `63c98dc` in
 [this CI run](https://github.com/enricolorenzoni59/antsdr-e200-fw/actions/runs/40300400750).
-Native compilation uses the target recipe options, but does not exercise
-Buildroot's complete ARM dependency graph, the ARM loader, device access or RF.
+That CI run checks native compilation. The subsequent complete ARM build and
+board checks use `8c9e790` and are detailed in the linked hardware record.
 
-## Remaining qualification
+## Repeating the build and qualification
 
 Use a **fresh** work directory on Linux x86-64 with Docker and the documented
 disk/RAM capacity. Old build outputs are not suitable for this migration.
@@ -77,7 +79,7 @@ The baseline and Bash reports are in their respective `evidence/native-iio.json`
 files; the final CPIO report is in `package/rootfs/manifest.json`.
 Regenerate legal-info and source materials for the new component set.
 
-Before qualifying the image, repeat cold/warm boot, recovery, bounded local
+For another image, repeat cold/warm boot, recovery, bounded local
 self-test and sustained single-RX reception with both native and legacy
 network clients. Recheck client failure/reconnection and the known new-SSH-session
 overflow condition. This migration makes no claim to fix that condition or to

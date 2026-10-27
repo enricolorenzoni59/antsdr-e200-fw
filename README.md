@@ -6,11 +6,11 @@ Docker build that assembles a complete microSD image. Independent community proj
 **Developer preview:** this candidate uses native **libiio 1.0.0 throughout the
 firmware**, including local tools and libad9361. Legacy network clients remain
 supported; the old library, ABI shim and recovery daemon are removed.
-The migrated image requires a new full ARM build and hardware qualification.
-The previous mixed-runtime image passed clean builds, warm/cold boot, rollback
-and 10-minute single-RX tests at 24 MS/s with both clients. Those results do not
-qualify this candidate. New SSH sessions reproduced RX overflow on that image;
-connect before capture. See [migration status](docs/libiio-migration.md).
+The migrated image passed a full ARM build, SD write/readback, automatic warm
+boot, local self-tests and 10-minute single-RX tests at 24 MS/s with both clients.
+Physical cold boot of this image remains pending. New SSH sessions during RX
+still reproduce overflow; connect before capture. See the
+[hardware validation record](docs/native-iio-validation-2026-10-27.md).
 
 ## Quick start
 
@@ -71,11 +71,11 @@ replacements. [Pinned sources and comparison details](docs/firmware-comparison.m
 
 ## Scope and operation
 
-The previous mixed-runtime image sustained **24 MS/s, single RX, I16/Q16** for 10 minutes per
-client, without detected DMA overflow after the first startup second. A further
-10-minute native test after rollback/reinstallation also passed. Opening new SSH
-sessions during capture caused native RX overflow. With SSH connected beforehand,
-19 timed diagnostic commands passed during a further 10-minute native test.
+The native-IIO image sustained **24 MS/s, single RX, I16/Q16** for 10 minutes per
+client, without detected DMA overflow after the first startup second. Client
+pause/kill/reconnection recovery passed for both libraries. Opening a new SSH
+session during capture reproduced DMA overflow; two diagnostic commands over a
+connection established beforehand passed a 90-second native RX test.
 Connect before capture; other concurrent workloads remain unqualified.
 Use 32 kernel buffers:
 native libiio 1.0 requests **262,144 samples (1 MiB)**; legacy 0.26 requests

@@ -4,7 +4,7 @@
   "target_version": "0.1.0-rc1",
   "status": "developer-preview",
   "runtime_layout": "native-libiio-1",
-  "hardware_qualification": "pending for the native-IIO migration",
+  "hardware_qualification": "single RX 24 MS/s, local tests, client recovery and warm boot verified; physical cold boot pending; new-SSH RX overflow remains",
   "kernel": {
     "version": "6.12.111",
     "compiler": "GCC 15",
