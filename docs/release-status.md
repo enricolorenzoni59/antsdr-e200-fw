@@ -4,6 +4,10 @@ Developer preview. The current candidate migrates all firmware libraries and
 tools to native libiio 1.0.0, without the v0 ABI shim. It retains v0 network
 protocol support.
 
+The current 4 MiB DMA-block experiment is a new kernel/transport candidate.
+Its hardware qualification is pending; the records below identify earlier
+images and do not qualify this change.
+
 ## Native-IIO image (2026-10-27)
 
 Commit `8c9e7901c2587b5933db4ad55ce50bc5399402ef` completed a fresh ARM build

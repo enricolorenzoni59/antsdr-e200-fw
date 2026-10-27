@@ -62,27 +62,27 @@ static void check(const char *name, struct iio_device d, unsigned int bits,
 int main(void)
 {
     struct iio_device d;
-    check("RX1", device(), 3, 4, 262144);
-    check("dual", device(), 15, 8, 131072);
+    check("RX1", device(), 3, 4, 1048576);
+    check("dual", device(), 15, 8, 524288);
     /* Exhaust partial/mixed masks at both otherwise eligible strides. */
     for (unsigned int mask = 0; mask < 16; mask++) {
-        check("four-byte mask", device(), mask, 4, mask == 3 ? 262144 : 0);
-        check("eight-byte mask", device(), mask, 8, mask == 15 ? 131072 : 0);
+        check("four-byte mask", device(), mask, 4, mask == 3 ? 1048576 : 0);
+        check("eight-byte mask", device(), mask, 8, mask == 15 ? 524288 : 0);
     }
     check("negative stride", device(), 15, -22, 0);
     check("wide stride", device(), 15, 16, 0);
-    d = device(); d.count = 2; check("single DT", d, 3, 4, 262144);
+    d = device(); d.count = 2; check("single DT", d, 3, 4, 1048576);
     d = device(); d.name = NULL; check("unnamed", d, 15, 8, 0);
     d = device(); d.name = "other"; check("other device", d, 15, 8, 0);
-    d = device(); d.count = 5; check("disabled extra", d, 15, 8, 131072);
+    d = device(); d.count = 5; check("disabled extra", d, 15, 8, 524288);
     check("enabled extra", d, 31, 8, 0);
     d = device();
     for (unsigned int i = 0; i < 4; i++) d.channels[i].format.bits = 16;
-    check("16-bit DSP", d, 15, 8, 131072);
+    check("16-bit DSP", d, 15, 8, 524288);
     d = device();
     struct iio_channel swap = d.channels[0];
     d.channels[0] = d.channels[3]; d.channels[3] = swap;
-    check("enumeration differs from scan order", d, 15, 8, 131072);
+    check("enumeration differs from scan order", d, 15, 8, 524288);
     d = device(); d.channels[3].index = 2; d.channels[3].id = "voltage2";
     check("duplicate identity", d, 15, 8, 0);
     /* Apply every malformed attribute to each enabled component. */

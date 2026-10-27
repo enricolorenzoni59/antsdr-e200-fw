@@ -4,7 +4,7 @@
   "target_version": "0.1.0-rc1",
   "status": "developer-preview",
   "runtime_layout": "native-libiio-1",
-  "hardware_qualification": "single RX 24 MS/s, local tests, client recovery and warm boot verified; physical cold boot pending; new-SSH RX overflow remains",
+  "hardware_qualification": "4 MiB DMA candidate; new image hardware qualification pending",
   "kernel": {
     "version": "6.12.111",
     "compiler": "GCC 15",
@@ -37,7 +37,7 @@
     "receivers": 1,
     "rate": 24000000,
     "format": "I16/Q16",
-    "native_request_samples": 262144,
+    "native_request_samples": 1048576,
     "legacy_request_samples": 2097152,
     "kernel_buffers": 32
   },
