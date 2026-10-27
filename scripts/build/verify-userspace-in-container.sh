@@ -7,6 +7,13 @@ target=$output/target
 images=$output/images
 evidence=$root/evidence
 mkdir -p "$evidence"
+cmp /project/profiles/iq24/rootfs-overlay/usr/sbin/e200-service-start \
+    "$target/usr/sbin/e200-service-start"
+test -x "$target/usr/sbin/e200-service-start"
+grep -Fq '/usr/sbin/e200-service-start ssh start-stop-daemon -S' \
+    "$target/etc/init.d/S50dropbear"
+grep -Fq '/usr/sbin/e200-service-start iiod start-stop-daemon --start' \
+    "$target/etc/init.d/S60iiod"
 python3 /project/scripts/build/verify-native-iio.py "$target" \
     --readelf "$output/host/bin/arm-none-linux-gnueabihf-readelf" \
     > "$evidence/native-iio.json"

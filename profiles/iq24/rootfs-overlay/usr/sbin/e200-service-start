@@ -1,0 +1,21 @@
+#!/usr/bin/python3
+"""Set inherited scheduling before a service forks any worker or session."""
+import os
+import sys
+
+
+def main():
+    if len(sys.argv) < 3 or sys.argv[1] not in ('iiod', 'ssh'):
+        raise SystemExit('Usage: e200-service-start iiod|ssh COMMAND [ARG ...]')
+    if sys.argv[1] == 'iiod':
+        # Renicing the main PID later would miss existing network/worker threads.
+        os.setpriority(os.PRIO_PROCESS, 0, -10)
+    else:
+        os.sched_setaffinity(0, {0})
+        os.setpriority(os.PRIO_PROCESS, 0, 19)
+        os.sched_setscheduler(0, os.SCHED_IDLE, os.sched_param(0))
+    os.execvp(sys.argv[2], sys.argv[2:])
+
+
+if __name__ == '__main__':
+    main()
