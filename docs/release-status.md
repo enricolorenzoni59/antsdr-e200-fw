@@ -13,10 +13,24 @@ and was installed with verified SD readback. Image SHA256:
 Automatic warm boot, all 22 local self-tests, the ARM libad9361 read test,
 10-minute 24 MS/s single-RX captures with each client, and pause/kill/reconnection
 recovery passed. A new SSH connection during RX still caused DMA overflow;
-commands over an existing connection passed a 90-second comparison.
+commands over an existing connection passed a ten-minute test with 19 light
+diagnostics at 23.998402 MS/s and no detected DMA overflow after startup.
 Physical cold boot remains pending for this image. See the
 [complete native-image record](native-iio-validation-2026-10-27.md) for scope,
 measurements and remaining checks.
+
+## SSH stress investigation (2026-10-27)
+
+Nice, CPU affinity, `SCHED_IDLE` and iiod realtime trials did not reliably avoid
+fresh-SSH overflow. A separately built 4 MiB DMA candidate lost baseline
+throughput and was rejected. Both candidates were reverted; the restored image
+and measurements are recorded in the [investigation report](ssh-rx-investigation-2026-10-27.md).
+
+Subsequent [connection-phase tests](ssh-handshake-validation-2026-10-27.md)
+reproduced overflow before password submission and before disconnect. Public-key
+authentication, Curve25519 and an optimized Dropbear build did not fix it.
+A ten-minute 22 MS/s test failed at 460.823 s despite a 60-second pass.
+The firmware was unchanged throughout these tests.
 
 ## Historical mixed-runtime image
 
