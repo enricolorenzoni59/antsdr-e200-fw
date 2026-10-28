@@ -12,7 +12,16 @@ Physical cold boot of this image remains pending. New SSH sessions during RX
 still reproduce overflow; connect before capture. See the
 [hardware validation record](docs/native-iio-validation-2026-10-27.md).
 
-## Quick start
+## Quick quick start: prebuilt image
+
+Published images will be listed under [GitHub Releases](https://github.com/enricolorenzoni59/antsdr-e200-fw/releases).
+For a published preview: download `e200-sd.img.xz` and its `.sha256`, verify the
+checksum, write the image to a microSD, then boot and connect Ethernet.
+Each release includes `QUICKSTART.md`, its exact source commit and qualification status.
+Release drafts are maintainer review packages; a successful build is not a hardware test.
+See [draft release preparation](docs/release-draft.md). No binary release is cleared yet.
+
+## Quick start: build from source
 
 Use **Linux x86-64**, Git and a running Docker engine, as a non-root user.
 Allow at least **8 GiB RAM, 70 GiB free disk**, Internet access and several hours

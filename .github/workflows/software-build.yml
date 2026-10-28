@@ -3,6 +3,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: e200-full-build-${{ github.repository }}
+  cancel-in-progress: false
 jobs:
   build:
     # Requires an explicitly provisioned Linux x86-64 builder with >=70 GiB free.
