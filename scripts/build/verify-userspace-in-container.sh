@@ -7,6 +7,9 @@ target=$output/target
 images=$output/images
 evidence=$root/evidence
 mkdir -p "$evidence"
+python3 /project/scripts/build/verify-native-iio.py "$target" \
+    --readelf "$output/host/bin/arm-none-linux-gnueabihf-readelf" \
+    > "$evidence/native-iio.json"
 qemu-arm -L "$target" "$target/bin/busybox" echo 'ARM BusyBox execution: PASS' \
     > "$evidence/arm-userspace-smoke.log"
 qemu-arm -L "$target" "$target/usr/bin/python3" --version \

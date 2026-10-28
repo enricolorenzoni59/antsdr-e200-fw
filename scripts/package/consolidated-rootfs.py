@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Apply a checked iiod overlay to the qualified Bash CPIO, without extraction.
+"""Overlay the patched native-v1 daemon and libraries on a native-v1 CPIO.
 
-Run in the pinned Docker package environment. Original archive members remain
-byte-for-byte unchanged except the daemon and its defaults; preserve the old
-daemon separately. No libiio 0.x ABI files are replaced.
+Require an explicit input manifest: this candidate has no hardware-qualified
+historical pins. Reject any leftover libiio v0 ABI, tool or dependency.
 """
 import argparse
 import gzip
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import stat
@@ -15,13 +15,11 @@ import struct
 import zlib
 
 ROOT = Path(__file__).resolve().parents[2]
-PINS = {
-    'rootfs.cpio.gz': 'fea1618d00c0c7ee9264d9493b0cebd2e48bbf2e5d9752650812025aa691470c',
-    'rootfs.cpio.uboot': '6b5ffcade2bb21ce3aaf170533d19b56fc74d1aeda91628f37665d8c37b4d582',
-    'usr/sbin/iiod': '12429fd321481979e8e52c9c8077e6650e87e6128b23ee62900341fe89118c82',
-    'usr/lib/libiio.so.1.0.0': 'c6cc085e884469f939bbb80b5b6fb9545d72782eb246b2457a1398bb97c160c9',
-    'usr/lib/libzstd.so.1.5.7': '42d24e7e5f54152ef4387fd11d9e70d4445de9ad0c6e71d18957a64f3ce56383',
-}
+INPUT_NAMES = ('rootfs.cpio.gz', 'rootfs.cpio.uboot', 'usr/sbin/iiod',
+               'usr/lib/libiio.so.1.0.0', 'usr/lib/libzstd.so.1.5.7')
+spec = importlib.util.spec_from_file_location('native_iio', ROOT / 'scripts/build/verify-native-iio.py')
+native_iio = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(native_iio)
 
 
 def sha(data):
@@ -70,11 +68,11 @@ def main():
     p.add_argument('--bash-images', type=Path, required=True)
     p.add_argument('--iiod-stage', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
-    p.add_argument('--build-inputs', type=Path,
-                   help='Explicit hashes for a NEW unqualified build; default preserves historical pins')
+    p.add_argument('--build-inputs', type=Path, required=True,
+                   help='Explicit hashes for this new, unqualified build')
     a = p.parse_args()
-    pins = json.loads(a.build_inputs.read_text()) if a.build_inputs else PINS
-    if set(pins) != set(PINS):
+    pins = json.loads(a.build_inputs.read_text())
+    if set(pins) != set(INPUT_NAMES):
         raise ValueError('Build input manifest must identify exactly the five expected inputs')
     inputs = {}
     for name, expected in pins.items():
@@ -86,48 +84,30 @@ def main():
     header = inputs['rootfs.cpio.uboot'][:64]
     if inputs['rootfs.cpio.uboot'][64:] != inputs['rootfs.cpio.gz']:
         raise ValueError('Ramdisk payload mismatch')
-    for name in ('usr/sbin/iiod', 'etc/default/iiod'):
+    replacements = {
+        name: inputs[name] for name in ('usr/sbin/iiod', 'usr/lib/libiio.so.1.0.0',
+                                       'usr/lib/libzstd.so.1.5.7')
+    }
+    replacements['etc/default/iiod'] = (ROOT / 'profiles/iq24-consolidated/iiod.default').read_bytes()
+    for name in replacements:
+        if name not in original:
+            raise ValueError(f'Missing native rootfs member: {name}')
         if original[name][1][4] != 1 or not stat.S_ISREG(original[name][1][1]):
             raise ValueError(f'Expected unlinked regular file: {name}')
-    replacements = {
-        'usr/sbin/iiod': inputs['usr/sbin/iiod'],
-        'etc/default/iiod': (ROOT / 'profiles/iq24-consolidated/iiod.default').read_bytes(),
-    }
     data = bytearray()
     for key, (name, fields, payload, raw) in original.items():
         data += member(name, fields, replacements[key]) if key in replacements else raw
-    inode = max(item[1][0] for item in original.values()) + 1
-    epoch = original['usr/sbin/iiod'][1][5]
-    added = {}
-
-    def add(name, mode, payload=b''):
-        nonlocal inode, data
-        if name in original:
-            if stat.S_ISDIR(mode) and stat.S_ISDIR(original[name][1][1]):
-                return
-            raise ValueError(f'Overlay collision: {name}')
-        fields = [inode, mode, 0, 0, 2 if stat.S_ISDIR(mode) else 1, epoch, 0, 0, 0, 0, 0, 0, 0]
-        inode += 1
-        data += member(name, fields, payload)
-        added[name] = dict(mode=oct(mode), sha256=sha(payload), bytes=len(payload))
-
-    for directory in ('opt', 'opt/e200', 'opt/e200/libiio1', 'opt/e200/libiio1/lib'):
-        add(directory, stat.S_IFDIR | 0o755)
-    add('usr/sbin/iiod-0.26', stat.S_IFREG | 0o755, original['usr/sbin/iiod'][2])
-    for name, target in (('libiio.so.1.0.0', 'libiio.so.1'), ('libzstd.so.1.5.7', 'libzstd.so.1')):
-        add('opt/e200/libiio1/lib/' + name, stat.S_IFREG | 0o755, inputs['usr/lib/' + name])
-        add('opt/e200/libiio1/lib/' + target, stat.S_IFLNK | 0o777, name.encode())
     data += member('TRAILER!!!', [0] * 13, b'')
     data += bytes((-len(data)) % 512)
     result = entries(bytes(data))
     for name in original:
         if name not in replacements and result[name][3] != original[name][3]:
             raise ValueError(f'Unexpected member change: {name}')
-    if result['usr/sbin/iiod-0.26'][2] != original['usr/sbin/iiod'][2]:
-        raise ValueError('Recovery daemon mismatch')
+    native_report = native_iio.verify({name: (fields[1], payload)
+                                      for name, (_, fields, payload, _) in result.items()})
     compressed = gzip.compress(bytes(data), compresslevel=9, mtime=0)
     words = list(struct.unpack('>7I4B32s', header))
-    words[1], words[3], words[6], words[11] = 0, len(compressed), zlib.crc32(compressed), b'E200 SDK14 iiod1 Bash'
+    words[1], words[3], words[6], words[11] = 0, len(compressed), zlib.crc32(compressed), b'E200 native IIO1 Bash'
     new_header = struct.pack('>7I4B32s', *words)
     words[1] = zlib.crc32(new_header)
     artifacts = {'rootfs.cpio': bytes(data), 'rootfs.cpio.gz': compressed,
@@ -136,7 +116,7 @@ def main():
     for name, payload in artifacts.items():
         (a.output / name).write_bytes(payload)
     report = dict(status='PACKAGED; BOOT UNTESTED', input_sha256=pins,
-                  defaults_sha256=sha(replacements['etc/default/iiod']), added=added,
+                  defaults_sha256=sha(replacements['etc/default/iiod']), native_iio=native_report,
                   replaced=list(replacements), preserved_original_members=len(original)-len(replacements),
                   artifacts={k: dict(sha256=sha(v), bytes=len(v)) for k, v in artifacts.items()})
     (a.output / 'manifest.json').write_text(json.dumps(report, indent=2) + '\n')

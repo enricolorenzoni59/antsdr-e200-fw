@@ -7,6 +7,11 @@ patch context retain their own notices and licenses.
 
 The build collects Buildroot legal-info; this is not a complete firmware SBOM.
 
+The current native-libiio-1 candidate changes libiio, libad9361 and the rootfs
+layout. Regenerate legal-info, source materials, runtime inventories and notices
+for its exact build. The historical counts and hashes below cover the previous
+mixed-runtime image only.
+
 For the tested `f3e6be04aa72dfee4fc1de5f5bd7553bd7767760` build, the source
 collector completed on 2026-09-28: 246 inventoried files, 932,367,180 bytes,
 with every inventory SHA256 checked. The Buildroot manifests list 15 target
