@@ -29,6 +29,8 @@ jobs:
           python3 scripts/build/prepare-transport-tests.py
       - name: Python regressions
         run: python3 -m pytest tests/host -q
+      - name: Compile native IIO stack without the v0 ABI shim
+        run: python3 scripts/build/check-native-iio.py
       - name: Native transport and lifetime sanitizers
         run: sh tests/host/run-libiio1-transport.sh "$PWD/work/transport/libiio1-source"
       - name: RX layout and zero-copy pipeline

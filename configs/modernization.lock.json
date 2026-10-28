@@ -11,6 +11,11 @@
     "tag": "v1.0.0",
     "commit": "9a929664fd3effa500430626803ac59ecf2f4ed3"
   },
+  "libad9361": {
+    "repo": "https://github.com/analogdevicesinc/libad9361-iio.git",
+    "commit": "7d8e7cadd07636cafb7a87d6bcdcc4dd4fcca9b3",
+    "note": "Upstream native libiio v1 API port; E200 hardware qualification pending"
+  },
   "kernel": {
     "adi_base_commit": "bf1d49f17fa9e15bc40be2615ef67cdf023f660a",
     "stable_from": "6.12.77",
