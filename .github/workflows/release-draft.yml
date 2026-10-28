@@ -55,7 +55,7 @@ jobs:
           python3 scripts/package/release-draft.py --repo "$GITHUB_REPOSITORY" \
             --tag "$RELEASE_TAG" --commit "$GITHUB_SHA" --assets "$E200_RELEASE_ASSETS"
       - name: Preserve metadata only
-        if: always()
+        if: always() && env.E200_RELEASE_WORK != '' && env.E200_RELEASE_ASSETS != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-draft-metadata
