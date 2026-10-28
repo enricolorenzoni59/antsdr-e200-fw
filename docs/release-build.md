@@ -1,6 +1,6 @@
 # Build the selected public candidate
 
-Status: end-to-end clean build qualification in progress. The public workflow
+Status: native-libiio-1 migration; full ARM build and hardware qualification pending. The public workflow
 creates a new artifact; the historical laboratory image is not a substitute.
 
 Host regression checks run on standard GitHub-hosted runners. The optional
@@ -37,8 +37,18 @@ trigger an automatic reset of an existing checkout.
 The kernel source combines the pinned ADI commit, individually hashed stable
 updates, reviewed conflict resolutions, E200 board patches and cached RX.
 The baseline Buildroot stage supplies the SDK14 radio stack; the separate Bash
-stage builds 2026.08 userspace. Patched iiod1 and its private libraries are
-assembled into the CPIO without replacing the original libiio 0.26 ABI.
+stage builds 2026.08 userspace. Both use the recipes under
+`profiles/native-iio/recipes`: libiio 1.0.0 and the pinned upstream libad9361
+port to the v1 API. The historical v0 RX patch is no longer selected. The
+known v0-only Buildroot Python patch is removed after verifying its identity;
+unknown or modified package patches stop preparation.
+
+The final CPIO contains the patched iiod and native libraries in `/usr`, with
+no private library directory, v0 ABI shim or retained 0.26 daemon. The Buildroot
+outputs and final CPIO are checked for legacy files, broken required symlinks
+and ELF dependencies on `libiio.so.0`. A fresh hash manifest is mandatory for
+packaging; no historical mixed-runtime hashes qualify the new image.
+See [migration and validation status](libiio-migration.md).
 
 Kernel compilation, the userspace build after source download, candidate iiod
 compilation, native checks and final packaging run with Docker networking off.
@@ -56,7 +66,7 @@ for the separate `dd` command. Intermediate paths below are under `work/release/
 - `package/sd/e200-sd.img`: complete 129 MiB microSD image.
 - `package/sd/SHA256SUMS` and `manifest.json`: structural checks and identities.
 - `package/build-manifest.json`: source fingerprints and component locks.
-- `package/rootfs/`: consolidated CPIO and retained-daemon overlay manifest.
+- `package/rootfs/`: consolidated native-v1 CPIO and overlay/ABI-check manifest.
 - `bash/edge-userspace-output/legal-info/`: Buildroot licensing collection.
 - `evidence/`: container identities; capture command logs when invoking the build.
 

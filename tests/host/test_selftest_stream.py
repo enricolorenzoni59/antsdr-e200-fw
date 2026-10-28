@@ -1,6 +1,7 @@
 """Verify the self-test cannot pass short or failed receive commands."""
 import importlib.machinery
 import importlib.util
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -20,13 +21,14 @@ class StreamTests(unittest.TestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.path = Path(temp.name)
-        self.tool = self.path / 'iio_readdev'
+        self.tool = self.path / 'iio_rwdev'
         env = patch.dict(os.environ, PATH=str(self.path) + os.pathsep + os.environ['PATH'])
         env.start()
         self.addCleanup(env.stop)
 
     def fake_tool(self, count, status=0):
-        self.tool.write_text('#!/usr/bin/env python3\nimport sys\n'
+        self.tool.write_text('#!/usr/bin/env python3\nimport sys, json\nfrom pathlib import Path\n'
+                             'Path(__file__).with_suffix(".args").write_text(json.dumps(sys.argv[1:]))\n'
                              f'sys.stdout.buffer.write(bytes({count}))\nraise SystemExit({status})\n')
         self.tool.chmod(0o755)
 
@@ -56,6 +58,9 @@ class StreamTests(unittest.TestCase):
         result = MODULE.stream(['voltage0', 'voltage1'], 4, 1)
         self.assertEqual(result['samples_received'], 4)
         self.assertFalse(result['dma_continuity_verified'])
+        self.assertEqual(json.loads(self.tool.with_suffix('.args').read_text()),
+                         ['-u', 'local:', '-T', '5000', '-b', '262144', '-s', '4',
+                          'cf-ad9361-lpc', 'voltage0', 'voltage1'])
 
     def test_short_receive_cannot_pass(self):
         self.fake_tool(8)

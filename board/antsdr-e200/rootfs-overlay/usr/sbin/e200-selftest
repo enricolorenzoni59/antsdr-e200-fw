@@ -38,7 +38,7 @@ def attribute(device, names, value=None):
 
 def stream(channels, rate, seconds):
     samples = round(rate * seconds)
-    command = ['iio_readdev', '-T', '5000', '-b', '262144', '-s', str(samples),
+    command = ['iio_rwdev', '-u', 'local:', '-T', '5000', '-b', '262144', '-s', str(samples),
                'cf-ad9361-lpc', *channels]
     started = time.monotonic()
     received = 0
