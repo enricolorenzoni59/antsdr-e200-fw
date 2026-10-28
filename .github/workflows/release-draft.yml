@@ -1,0 +1,68 @@
+name: Prepare SD release draft (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: New preview tag (for example v0.1.0-rc1); creates a draft only
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: e200-full-build-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  draft:
+    runs-on: [self-hosted, linux, x64, e200-build]
+    permissions:
+      contents: write
+    timeout-minutes: 360
+    env:
+      E200_JOBS: '2'
+      PYTHONDONTWRITEBYTECODE: '1'
+      RELEASE_TAG: ${{ inputs.tag }}
+      GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select fresh build and asset directories
+        run: |
+          echo "E200_RELEASE_WORK=$RUNNER_TEMP/e200-release-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+          echo "E200_RELEASE_ASSETS=$RUNNER_TEMP/e200-assets-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+      - name: Check default-branch commit and unused release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/package/release-draft.py --repo "$GITHUB_REPOSITORY" \
+            --tag "$RELEASE_TAG" --commit "$GITHUB_SHA"
+      - name: Build and collect corresponding software sources
+        shell: bash
+        run: |
+          set -o pipefail
+          ./build.sh 2>&1 | tee "$RUNNER_TEMP/e200-build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.log"
+          bash scripts/build/release.sh sources
+      - name: Prepare checked SD assets and quick start
+        run: |
+          python3 scripts/package/release-assets.py --work "$E200_RELEASE_WORK" \
+            --output "$E200_RELEASE_ASSETS" --tag "$RELEASE_TAG" --commit "$GITHUB_SHA"
+      - name: Upload to an unpublished prerelease draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/package/release-draft.py --repo "$GITHUB_REPOSITORY" \
+            --tag "$RELEASE_TAG" --commit "$GITHUB_SHA" --assets "$E200_RELEASE_ASSETS"
+      - name: Preserve metadata only
+        if: always() && env.E200_RELEASE_WORK != '' && env.E200_RELEASE_ASSETS != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-draft-metadata
+          retention-days: 14
+          if-no-files-found: ignore
+          path: |
+            ${{ env.E200_RELEASE_WORK }}/package/build-manifest.json
+            ${{ env.E200_RELEASE_WORK }}/package/sd/manifest.json
+            ${{ env.E200_RELEASE_ASSETS }}/release-manifest.json
+            ${{ env.E200_RELEASE_ASSETS }}/SHA256SUMS
