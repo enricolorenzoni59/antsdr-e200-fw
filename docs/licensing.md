@@ -17,7 +17,7 @@ collector completed on 2026-09-28: 246 inventoried files, 932,367,180 bytes,
 with every inventory SHA256 checked. The Buildroot manifests list 15 target
 and 36 host packages; components assembled outside Buildroot need separate
 reconciliation. The only target package whose own license field is `unknown`
-is Arm GNU 14.2.rel1. Its source snapshot, license text and upstream manifest
+is Arm GNU 15.2.rel1. Its source snapshot, license text and upstream manifest
 are included separately. Collection and checksum checks do not close the
 runtime license review or vendor binary redistribution review.
 
@@ -119,19 +119,19 @@ These findings concern the downloaded vendor inputs. This project's GPL grant
 does not relicense them, and the presence of source in an archive does not by
 itself establish complete corresponding source or permission for every input.
 
-## Arm GNU 14.2 material located
+## Arm GNU 15.2 material located
 
 The pinned compiler archive includes `license.txt` (SHA256
 `9b47c67a1d2421fa5724e2bfd9e2be03f399ade15273b6e38a8f2a3c9bfe31d6`) and
-`14.2.rel1-x86_64-arm-none-linux-gnueabihf-manifest.txt` (SHA256
-`abc8ce67fb380f88a64c581a02b5fec735ad66dc456877264ff92878453fec10`).
+`15.2.rel1-x86_64-arm-none-linux-gnueabihf-manifest.txt` (SHA256
+`d2cccdf30c70e734513b5bbaa9ff4b153a9708eebd51b24815ca70158d791386`).
 Buildroot's `unknown` entry reflects missing package metadata; it does not mean
 these documents are absent from the downloaded toolchain.
 
 The official Arm corresponding-source snapshot is available at
-[the 14.2.rel1 source archive](https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/srcrel/arm-gnu-toolchain-src-snapshot-14.2.rel1.tar.xz).
-Its [published SHA256](https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/srcrel/arm-gnu-toolchain-src-snapshot-14.2.rel1.tar.xz.sha256asc)
-is `e6405f20f8a817a50d92dbf7974d0ee77708dfdf9e79900a59c5d343b464ef9c`;
+[the 15.2.rel1 source archive](https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/srcrel/arm-gnu-toolchain-src-snapshot-15.2.rel1.tar.xz).
+Its [published SHA256](https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/srcrel/arm-gnu-toolchain-src-snapshot-15.2.rel1.tar.xz.sha256asc)
+is `06f4e5792b566a771c300ac6f46c3422e23e34f4e3a5d44a8cb5594ead6fb82e`;
 the downloaded snapshot was verified against it. The collector below preserves
 these materials alongside the new rootfs legal-info, kernel sources/changes,
 Buildroot and br2-external trees, prepared libiio sources and zstd archive.
