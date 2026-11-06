@@ -6,7 +6,7 @@
   "runtime_layout": "native-libiio-1",
   "hardware_qualification": "single RX 24 MS/s, local tests, client recovery and warm boot verified; physical cold boot pending; new-SSH RX overflow remains",
   "kernel": {
-    "version": "6.12.111",
+    "version": "6.12.115",
     "compiler": "GCC 15",
     "source_lock": "modernization.lock.json",
     "patch_series": "patches/linux/series",

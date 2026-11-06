@@ -1,0 +1,2 @@
+5a9e1651c2e457f3bb5d9efbd9e4cb680bade6a12f570c9fa8c8e569c30dc800
+Same DWC3 stream/no-stream rework as 6.12.111-112. The ADI gadget.c implementation was retained there, so this patch hunk conflicts identically. Keep the ADI implementation for the E200 candidate and review the DWC3 stream rework separately.
