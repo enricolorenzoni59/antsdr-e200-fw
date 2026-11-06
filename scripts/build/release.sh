@@ -15,12 +15,25 @@ docker=(docker)
 if [[ ${E200_DOCKER_SUDO:-0} == 1 ]]; then docker=(sudo -n docker); fi
 jobs=${E200_JOBS:-2}
 step() { [[ $stage == all || $stage == "$1" ]]; }
+# The dated Ubuntu snapshot occasionally answers 503. Docker does not retry,
+# so retry the build; completed layers are reused from the build cache.
+build_image() {
+    local attempt
+    for attempt in 1 2 3; do
+        "${docker[@]}" build "$@" && return 0
+        [[ $attempt == 3 ]] && break
+        printf 'Docker build failed (attempt %s/3); retrying in %ss\n' \
+            "$attempt" "$((attempt * 15))" >&2
+        sleep $((attempt * 15))
+    done
+    return 1
+}
 if step images; then
-    "${docker[@]}" build -t e200-release-kernel-base "$project/containers/kernel"
-    "${docker[@]}" build --build-arg BASE_IMAGE=e200-release-kernel-base -t e200-release-kernel "$project/containers/kernel-gcc15"
-    "${docker[@]}" build -t e200-release-userspace-base "$project/containers/userspace"
-    "${docker[@]}" build --build-arg BASE_IMAGE=e200-release-userspace-base -t e200-release-userspace "$project/containers/userspace-next"
-    "${docker[@]}" build --build-arg BUILDER_IMAGE=e200-release-userspace -t e200-release-package "$project/containers/package"
+    build_image -t e200-release-kernel-base "$project/containers/kernel"
+    build_image --build-arg BASE_IMAGE=e200-release-kernel-base -t e200-release-kernel "$project/containers/kernel-gcc15"
+    build_image -t e200-release-userspace-base "$project/containers/userspace"
+    build_image --build-arg BASE_IMAGE=e200-release-userspace-base -t e200-release-userspace "$project/containers/userspace-next"
+    build_image --build-arg BUILDER_IMAGE=e200-release-userspace -t e200-release-package "$project/containers/package"
 fi
 for image in e200-release-kernel e200-release-userspace e200-release-package; do
     "${docker[@]}" image inspect "$image" --format '{{.Id}}' > "$work/evidence/$image.txt"

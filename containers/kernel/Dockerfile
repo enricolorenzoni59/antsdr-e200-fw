@@ -11,6 +11,7 @@ RUN echo '6e8cdcc8c86103acd4fc14649eac62ff2037108389074a7b167567af33c32245  /tmp
     && rm -rf /tmp/ca-bootstrap /tmp/ca-certificates.deb
 ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8 TZ=UTC
 RUN rm -f /etc/apt/sources.list.d/ubuntu.sources \
+    && printf 'Acquire::Retries "10";\nAcquire::http::Timeout "60";\nAcquire::https::Timeout "60";\n' > /etc/apt/apt.conf.d/99e200-retries \
     && printf 'deb https://snapshot.ubuntu.com/ubuntu/%s resolute main universe\ndeb https://snapshot.ubuntu.com/ubuntu/%s resolute-updates main universe\ndeb https://snapshot.ubuntu.com/ubuntu/%s resolute-security main universe\n' \
       "$UBUNTU_SNAPSHOT" "$UBUNTU_SNAPSHOT" "$UBUNTU_SNAPSHOT" > /etc/apt/sources.list \
     && apt-get -o Acquire::Check-Valid-Until=false -o APT::Update::Error-Mode=any update \
