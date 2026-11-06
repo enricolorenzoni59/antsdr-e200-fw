@@ -37,7 +37,7 @@ def fetch(n):
 
 
 with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-    patches = list(pool.map(fetch, range(77, 111)))
+    patches = list(pool.map(fetch, range(77, 115)))
 (root / 'downloads.json').write_text(json.dumps(patches, indent=2) + '\n')
 source = root / 'modern-linux'
 if not source.exists():
