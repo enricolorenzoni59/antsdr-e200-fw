@@ -23,7 +23,7 @@ RUN rm -f /etc/apt/sources.list.d/ubuntu.sources \
     && dpkg-query -W > /opt/build-manifest/packages.tsv \
     && cp /etc/apt/sources.list /opt/build-manifest/sources.list \
     && rm -rf /var/lib/apt/lists/*
-# Buildroot selects and verifies its own Arm GNU 14.2.rel1 toolchain.
+# Buildroot selects and verifies its own Arm GNU 15.2.rel1 toolchain.
 RUN if ! getent passwd 1000 >/dev/null; then useradd --create-home --uid 1000 builder; fi
 USER 1000:1000
 WORKDIR /work
