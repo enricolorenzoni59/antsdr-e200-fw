@@ -1,0 +1,122 @@
+name: Candidate build (manual)
+
+# Builds an arbitrary branch or commit with the self-hosted E200 builder and
+# uploads the compressed SD image to an unpublished draft release. Draft
+# releases are visible only to repository writers; firmware binaries are not
+# uploaded as Actions artifacts. Use this to test a PR candidate on hardware.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or commit to build (for example candidate/kernel-6.12.115)
+        required: true
+        type: string
+      label:
+        description: Short label for the draft tag (letters, digits, dot, underscore, hyphen)
+        required: true
+        type: string
+      toolchain:
+        description: Userspace toolchain; must match the branch lock file
+        type: choice
+        options:
+          - '14.2'
+          - '15.2'
+        default: '14.2'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e200-full-build-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64, e200-build]
+    permissions:
+      contents: write
+    timeout-minutes: 360
+    env:
+      E200_JOBS: '2'
+      PYTHONDONTWRITEBYTECODE: '1'
+      CANDIDATE_REF: ${{ inputs.ref }}
+      CANDIDATE_LABEL: ${{ inputs.label }}
+      E200_USERSPACE_TOOLCHAIN: ${{ inputs.toolchain }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate the candidate identity
+        run: |
+          set -euo pipefail
+          case "$CANDIDATE_LABEL" in
+            ''|*[!A-Za-z0-9._-]*) echo 'Invalid label' >&2; exit 2 ;;
+          esac
+          test "${#CANDIDATE_LABEL}" -le 40 || { echo 'Label too long' >&2; exit 2; }
+          sha=$(git rev-parse HEAD)
+          echo "CANDIDATE_SHA=$sha" >> "$GITHUB_ENV"
+          echo "E200_RELEASE_WORK=$RUNNER_TEMP/e200-candidate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+          printf 'candidate=%s\nref=%s\ncommit=%s\ntoolchain=%s\n' \
+            "$CANDIDATE_LABEL" "$CANDIDATE_REF" "$sha" "$E200_USERSPACE_TOOLCHAIN"
+          avail=$(df -B1 --output=avail "$RUNNER_TEMP" | tail -1)
+          test "$avail" -ge $((80 * 1024 * 1024 * 1024)) || {
+            echo "Insufficient free space in RUNNER_TEMP: $avail bytes" >&2
+            exit 1
+          }
+
+      - name: Build candidate
+        shell: bash
+        run: |
+          set -o pipefail
+          ./build.sh 2>&1 | tee "$RUNNER_TEMP/e200-candidate-$GITHUB_RUN_ID.log"
+
+      - name: Package candidate image
+        run: |
+          set -euo pipefail
+          test -s build/image.raw
+          test -s "$E200_RELEASE_WORK/package/build-manifest.json"
+          test -s "$E200_RELEASE_WORK/package/sd/manifest.json"
+          python3 - <<'PY'
+          import lzma, shutil
+          with open('build/image.raw', 'rb') as src, \
+                  lzma.open('build/e200-sd-candidate.img.xz', 'wb', preset=6) as dst:
+              shutil.copyfileobj(src, dst)
+          PY
+          (cd build && sha256sum e200-sd-candidate.img.xz > e200-sd-candidate.img.xz.sha256)
+          cp "$E200_RELEASE_WORK/package/build-manifest.json" build/build-manifest.json
+          cp "$E200_RELEASE_WORK/package/sd/manifest.json" build/sd-manifest.json
+          {
+            echo "Candidate: $CANDIDATE_LABEL"
+            echo "Ref: $CANDIDATE_REF"
+            echo "Commit: $CANDIDATE_SHA"
+            echo "Toolchain: $E200_USERSPACE_TOOLCHAIN"
+            echo "Status: hardware untested; unpublished draft"
+          } > build/BUILD.txt
+
+      - name: Upload to an unpublished candidate draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="candidate-${CANDIDATE_LABEL}-${GITHUB_RUN_ID}"
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" \
+            --target "$CANDIDATE_SHA" --draft --prerelease --latest=false \
+            --title "E200 candidate ${CANDIDATE_LABEL}" \
+            --notes-file build/BUILD.txt \
+            build/e200-sd-candidate.img.xz \
+            build/e200-sd-candidate.img.xz.sha256 \
+            build/build-manifest.json \
+            build/sd-manifest.json \
+            build/BUILD.txt
+
+      - name: Preserve the build log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-build-log
+          retention-days: 14
+          if-no-files-found: ignore
+          path: ${{ runner.temp }}/e200-candidate-${{ github.run_id }}.log
