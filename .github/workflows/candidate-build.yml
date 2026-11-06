@@ -62,7 +62,7 @@ jobs:
           printf 'candidate=%s\nref=%s\ncommit=%s\ntoolchain=%s\n' \
             "$CANDIDATE_LABEL" "$CANDIDATE_REF" "$sha" "$E200_USERSPACE_TOOLCHAIN"
           avail=$(df -B1 --output=avail "$RUNNER_TEMP" | tail -1)
-          test "$avail" -ge $((80 * 1024 * 1024 * 1024)) || {
+          test "$avail" -ge $((70 * 1024 * 1024 * 1024)) || {
             echo "Insufficient free space in RUNNER_TEMP: $avail bytes" >&2
             exit 1
           }
