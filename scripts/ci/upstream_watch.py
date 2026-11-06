@@ -307,6 +307,10 @@ def render(data):
         lines.append("- None: every tracked component is current.")
     lines.append("")
     lines.append(
+        "Related roadmap issues: #5 (kernel), #6 (Buildroot/toolchains/packages), "
+        "#7 (libiio/iiod)."
+    )
+    lines.append(
         "Dependabot separately covers GitHub Actions and `requirements-test.txt`."
     )
     return "\n".join(lines)
@@ -351,14 +355,16 @@ def main():
     if issue:
         previous = STATE_RE.search(issue.get("body") or "")
         previous_hash = previous.group(1) if previous else None
-        if changes == previous_hash:
-            print("No change since the last run; leaving the issue untouched.")
-            return 0
+        # Always refresh the tables; only comment or close when the update
+        # set changed, so a stable week does not notify anyone.
         subprocess.run(
             ["gh", "api", "-X", "PATCH", f"repos/{REPO}/issues/{issue['number']}",
              "--input", "-"],
             input=json.dumps({"body": body}), text=True, check=True,
         )
+        if changes == previous_hash:
+            print("No change since the last run; issue body refreshed.")
+            return 0
         if updates:
             subprocess.run(
                 ["gh", "issue", "comment", str(issue["number"]), "--repo", REPO,
