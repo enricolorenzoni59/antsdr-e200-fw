@@ -112,6 +112,17 @@ jobs:
             build/sd-manifest.json \
             build/BUILD.txt
 
+      - name: Report prepared kernel hashes when preparation fails
+        if: failure()
+        run: |
+          set -euo pipefail
+          root="$E200_RELEASE_WORK/next/kernel612"
+          for name in prepared.diff prepared-files.json; do
+            if [ -f "$root/$name" ]; then
+              sha256sum "$root/$name"
+            fi
+          done
+
       - name: Preserve the build log
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
