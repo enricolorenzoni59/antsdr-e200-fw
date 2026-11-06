@@ -20,7 +20,7 @@ esac
 mkdir -p /work/evidence
 if [ "$stage" = prepare ]; then
     [ ! -e "$output/.config" ] || { echo 'Candidate already configured' >&2; exit 1; }
-    [ "$(git -C "$source" rev-parse HEAD)" = d5180309b1b66ef3b8eaccca70ad69be8e0729a1 ]
+    [ "$(git -C "$source" rev-parse HEAD)" = 7fdeadb3b9f12f78e5fccca914d7fef47090ab9a ]
     [ "$(git -C /baseline/modern-buildroot rev-parse HEAD)" = 2e2994de5213abfa63ab5cf5f9291bf62b53d094 ]
     cp -a /baseline/modern-br2-external "$external"
     # Keep the native radio recipes fixed. The default preserves the SDK;
