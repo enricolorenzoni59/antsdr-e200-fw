@@ -1,2 +1,0 @@
-6827f3c252b075d6473d9f94c9ae854c452b50ef26dbfaa386068aa12f5893b7
-Upstream 6.12.114 adds rx_submit_lock and fences dmaengine RX resubmission against teardown in axienet. The ADI tree carries a different multi-queue axienet implementation with its own stop path, so the header and main.c changes need a dedicated port and Ethernet qualification. Retain the ADI driver for this candidate and revisit the teardown fix before release.
