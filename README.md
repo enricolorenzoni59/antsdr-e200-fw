@@ -63,7 +63,7 @@ this is a source/build comparison, not a performance ranking or binary audit.
 
 | Firmware | Main purpose | Linux | Userspace | Boot / FPGA |
 | --- | --- | --- | --- | --- |
-| **This project, current candidate** | IIO IQ streaming; initial scope single RX | ADI **6.12.111**, GCC 15 | **Buildroot 2026.08**, BusyBox + Bash; native libiio/iiod **1.0.0**, libad9361 v1 API port | Official E200 v0.39 BOOT.BIN + FPGA; SD, rootfs in RAM |
+| **This project, current candidate** | IIO IQ streaming; initial scope single RX | ADI **6.12.115**, GCC 15 | **Buildroot 2026.08.1**, BusyBox + Bash; native libiio/iiod **1.0.0**, libad9361 v1 API port | Official E200 v0.39 BOOT.BIN + FPGA; SD, rootfs in RAM |
 | [MicroPhase IIO / v0.39](https://github.com/MicroPhase/antsdr-fw-patch) | Original Pluto-derived ANTSDR firmware | ADI **6.1.0** | **Buildroot 2023.02.5**, libiio 0.26 | Vendor U-Boot **2016.07** + FSBL; IIO FPGA |
 | [m1nl/e200-fw](https://github.com/m1nl/e200-fw) | Modernized E200 IIO firmware | ADI **6.1.70** | **Buildroot 2025.05.2**, libiio 0.26 | U-Boot **2016.07** + FSBL; rebuilds E200 HDL with Vivado 2023.2 |
 | [Tezuka / E200 profile](https://github.com/F5OEO/tezuka_fw) | Multi-board SDR, IIO, Maia-SDR and dashboard | ADI **6.12.77** | **Buildroot 2026.02**, integrated SDR apps | U-Boot **2025.01**; supplied E200 FSBL/FPGA, SD boot |

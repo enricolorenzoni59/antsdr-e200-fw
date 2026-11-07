@@ -11,9 +11,10 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
 ARM_SOURCE = {
-    'url': 'https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/srcrel/arm-gnu-toolchain-src-snapshot-14.2.rel1.tar.xz',
-    'sha256': 'e6405f20f8a817a50d92dbf7974d0ee77708dfdf9e79900a59c5d343b464ef9c',
-    'hash_source': 'https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/srcrel/arm-gnu-toolchain-src-snapshot-14.2.rel1.tar.xz.sha256asc',
+    'version': '15.2.rel1',
+    'url': 'https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/srcrel/arm-gnu-toolchain-src-snapshot-15.2.rel1.tar.xz',
+    'sha256': '06f4e5792b566a771c300ac6f46c3422e23e34f4e3a5d44a8cb5594ead6fb82e',
+    'hash_source': 'https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/srcrel/arm-gnu-toolchain-src-snapshot-15.2.rel1.tar.xz.sha256asc',
 }
 
 
@@ -52,12 +53,20 @@ def main():
     # Materialize any download-cache links so the collection is self-contained.
     shutil.copytree(legal, output / 'buildroot-legal-info', symlinks=False)
     shutil.copy2(arm, output / arm.name)
-    toolchain = work / 'baseline/edge-userspace-output/host/opt/ext-toolchain'
-    for name in ('license.txt', '14.2.rel1-x86_64-arm-none-linux-gnueabihf-manifest.txt'):
+    manifest = f"{ARM_SOURCE['version']}-x86_64-arm-none-linux-gnueabihf-manifest.txt"
+    toolchain = None
+    for candidate in (work / 'bash/edge-userspace-output/host/opt/ext-toolchain',
+                      work / 'baseline/edge-userspace-output/host/opt/ext-toolchain'):
+        if (candidate / manifest).is_file():
+            toolchain = candidate
+            break
+    if toolchain is None:
+        raise SystemExit(f'Arm toolchain manifest not found: {manifest}')
+    for name in ('license.txt', manifest):
         shutil.copy2(toolchain / name, output / ('arm-' + name))
     sources = {
         'kernel': work / 'next/kernel612/modern-linux',
-        'buildroot-2026.08': work / 'bash/modern-buildroot',
+        'buildroot-2026.08.1': work / 'bash/modern-buildroot',
         'buildroot-sdk14-recipes': work / 'baseline/modern-buildroot',
         'br2-external': work / 'bash/modern-br2-external',
         'libiio-upstream': work / 'next/libiio-1.0',
