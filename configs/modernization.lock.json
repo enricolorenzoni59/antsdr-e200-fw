@@ -19,7 +19,7 @@
   "kernel": {
     "adi_base_commit": "bf1d49f17fa9e15bc40be2615ef67cdf023f660a",
     "stable_from": "6.12.77",
-    "stable_target": "6.12.111",
+    "stable_target": "6.12.115",
     "stable_patches": [
       {
         "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.77-78.xz",
@@ -156,10 +156,26 @@
       {
         "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.110-111.xz",
         "sha256": "5848d1cc30a7d209a879fa5a5e7c3c6fcbd119d8512a4b0d09663d4f50b1fd37"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.111-112.xz",
+        "sha256": "3ecd965d808929002eea0e1da71c76138c8e77f332202c267fd3d6b89d5c8f9e"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.112-113.xz",
+        "sha256": "430b2a299a3751271f2b9aa41aa48139120932ddcd8aad42ae11be0fbde73c9f"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.113-114.xz",
+        "sha256": "f9b804b2e7912ba4dc620f7f0de21f7d711d68aa6f29373da5632d456c6b43f9"
+      },
+      {
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/patch-6.12.114-115.xz",
+        "sha256": "aedeff550cf0d1f062310369e4dae908b46bccb0b8e9bb2d9b69c5c5f83d2a75"
       }
     ],
-    "prepared_diff_sha256": "75b2c534a8059e49836c4e63b14212698ac04a8a2fa09544fc621eb79472a4f5",
-    "prepared_files_sha256": "147b4baa4b3a8b1cddb870e5e457521b98a3eb53a653b4e1706019f03f05501a"
+    "prepared_diff_sha256": "d70fca60948e4a0dc5b9e291bf8dbaf411dcafa46828cf12390aa69fbe25f269",
+    "prepared_files_sha256": "99c4338949530973024aa84647c69e6b3d37dbfbbe4f5924ce193c6672a204c1"
   },
   "zstd": {
     "version": "1.5.7",

@@ -1,0 +1,2 @@
+af906feba00987a7081af1223e38d073f1a62240c50c08b7be0217c3f0071db9
+ADI's xiic driver already carries runtime-PM callbacks and a different SMBus block-read implementation close to this stable rework, so the three-way merge conflicts. Retain the ADI driver for this candidate: the E200 uses this controller for slow housekeeping, not the RX path. Review the upstream SMBus/runtime-PM changes separately.

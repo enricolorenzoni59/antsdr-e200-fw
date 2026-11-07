@@ -1,0 +1,32 @@
+diff --git a/drivers/net/ethernet/xilinx/xilinx_axienet.h b/drivers/net/ethernet/xilinx/xilinx_axienet.h
+index 88196ff..493aea7 100644
+--- a/drivers/net/ethernet/xilinx/xilinx_axienet.h
++++ b/drivers/net/ethernet/xilinx/xilinx_axienet.h
+@@ -945,8 +945,9 @@ struct skbuf_dma_descriptor {
+  * @stats_lock: Lock for @hw_stats_seqcount
+  * @stats_work: Work for reading the hardware statistics counters often enough
+  *              to catch overflows.
+- * @stopping:   Set when @dma_err_task shouldn't do anything because we are
+- *              about to stop the device.
++ * @stopping:   Set when we are about to stop the device: makes @dma_err_task
++ *              a no-op (legacy DMA path) and fences RX descriptor
++ *              resubmission in axienet_dma_rx_cb() (dmaengine path).
+  * @eth_irq:	Ethernet core IRQ number
+  * @phy_mode:	Phy type to identify between MII/GMII/RGMII/SGMII/1000 Base-X
+  * @options:	AxiEthernet option word
+@@ -980,6 +981,7 @@ struct skbuf_dma_descriptor {
+  * @tx_ring_tail: TX skb ring buffer tail index.
+  * @rx_ring_head: RX skb ring buffer head index.
+  * @rx_ring_tail: RX skb ring buffer tail index.
++ * @rx_submit_lock: Protects RX ring resubmission vs teardown in dmaengine path.
+  * @eth_hasnobuf: Ethernet is configured in Non buf mode.
+  * @eth_hasptp: Ethernet is configured for ptp.
+  * @axienet_config: Ethernet config structure
+@@ -1092,6 +1094,7 @@ struct axienet_local {
+ 	int tx_ring_tail;
+ 	int rx_ring_head;
+ 	int rx_ring_tail;
++	spinlock_t rx_submit_lock;
+ 	bool eth_hasnobuf;
+ 	bool eth_hasptp;
+ 	const struct axienet_config *axienet_config;

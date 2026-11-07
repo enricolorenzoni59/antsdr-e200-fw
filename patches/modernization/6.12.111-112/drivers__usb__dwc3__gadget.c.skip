@@ -1,0 +1,2 @@
+5a9e1651c2e457f3bb5d9efbd9e4cb680bade6a12f570c9fa8c8e569c30dc800
+Upstream 6.12.112 reworks the DWC3 stream/no-stream handling, adds dwc3_nostream_work and changes the ForceRM flag on several dwc3_stop_active_transfer call sites. The ADI tree carries a different stream implementation in gadget.c, so applying these hunks would replace unrelated ADI behavior. Retain the ADI file for this candidate (USB gadget is not part of the E200 RX path) and review the DWC3 stream rework separately.
