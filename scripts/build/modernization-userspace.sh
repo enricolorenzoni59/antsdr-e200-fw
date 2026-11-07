@@ -7,7 +7,7 @@ project=${E200_PROJECT_DIR:-/project}
 source=/work/modern-buildroot
 external=/work/modern-br2-external
 output=/work/edge-userspace-output
-toolchain=${E200_USERSPACE_TOOLCHAIN:-14.2}
+toolchain=${E200_USERSPACE_TOOLCHAIN:-15.2}
 profile=${E200_USERSPACE_PROFILE:-iq24}
 case "$profile" in
     iq24|iq24-bash) ;;

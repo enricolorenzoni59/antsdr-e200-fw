@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 360
     env:
       E200_JOBS: '2'
+      E200_USERSPACE_TOOLCHAIN: '15.2'
       PYTHONDONTWRITEBYTECODE: '1'
       RELEASE_TAG: ${{ inputs.tag }}
       GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
