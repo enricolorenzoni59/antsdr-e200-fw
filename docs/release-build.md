@@ -37,7 +37,7 @@ trigger an automatic reset of an existing checkout.
 The kernel source combines the pinned ADI commit, individually hashed stable
 updates, reviewed conflict resolutions, E200 board patches and cached RX.
 The baseline Buildroot stage supplies the SDK14 radio stack; the separate Bash
-stage builds 2026.08 userspace. Both use the recipes under
+stage builds 2026.08.1 userspace. Both use the recipes under
 `profiles/native-iio/recipes`: libiio 1.0.0 and the pinned upstream libad9361
 port to the v1 API. The historical v0 RX patch is no longer selected. The
 known v0-only Buildroot Python patch is removed after verifying its identity;

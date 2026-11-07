@@ -37,7 +37,7 @@ selects Vivado 2023.2 and builds HDL, FSBL and BOOT.bin. The
 selects an internal GCC 13 toolchain and glibc. There were no GitHub releases at
 inspection. This is not evidence that it does not work; hardware qualification
 and sustained-RX performance were not verified here. Relative to that project,
-our selected changes are Linux 6.12.115, Buildroot 2026.08, patched iiod 1.0 and
+our selected changes are Linux 6.12.115, Buildroot 2026.08.1, patched iiod 1.0 and
 Docker assembly from existing vendor boot/FPGA inputs. No performance superiority
 is claimed, and no implementation files were imported from this review.
 

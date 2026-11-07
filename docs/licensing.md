@@ -68,7 +68,7 @@ The actual v0.39 `e200.zip` contains `e200/build/LICENSE.html` (SHA256 recorded
 in `configs/vendor-v039-artifacts.json`). Its package inventory names Linux,
 U-Boot, libiio and other old rootfs components, including an unknown external
 toolchain license entry. It is an inventory of the vendor image, not our new
-Buildroot 2026.08 rootfs or a complete component-level FPGA/FSBL inventory.
+Buildroot 2026.08.1 rootfs or a complete component-level FPGA/FSBL inventory.
 Its inherited written-offer text assumes the recipient built from source;
 it must not be copied as our own binary distribution statement.
 

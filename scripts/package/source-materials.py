@@ -57,7 +57,7 @@ def main():
         shutil.copy2(toolchain / name, output / ('arm-' + name))
     sources = {
         'kernel': work / 'next/kernel612/modern-linux',
-        'buildroot-2026.08': work / 'bash/modern-buildroot',
+        'buildroot-2026.08.1': work / 'bash/modern-buildroot',
         'buildroot-sdk14-recipes': work / 'baseline/modern-buildroot',
         'br2-external': work / 'bash/modern-br2-external',
         'libiio-upstream': work / 'next/libiio-1.0',

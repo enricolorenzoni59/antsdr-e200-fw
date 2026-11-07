@@ -3,8 +3,8 @@
   "baseline_commit": "3cf2e245e43af1201d69a24865454ff993b11bb8",
   "buildroot": {
     "repo": "https://github.com/buildroot/buildroot.git",
-    "tag": "2026.08",
-    "commit": "d5180309b1b66ef3b8eaccca70ad69be8e0729a1"
+    "tag": "2026.08.1",
+    "commit": "7fdeadb3b9f12f78e5fccca914d7fef47090ab9a"
   },
   "libiio": {
     "repo": "https://github.com/analogdevicesinc/libiio.git",
