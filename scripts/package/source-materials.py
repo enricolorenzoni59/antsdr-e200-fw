@@ -10,10 +10,19 @@ import tarfile
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
-ARM_SOURCE = {
-    'url': 'https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/srcrel/arm-gnu-toolchain-src-snapshot-14.2.rel1.tar.xz',
-    'sha256': 'e6405f20f8a817a50d92dbf7974d0ee77708dfdf9e79900a59c5d343b464ef9c',
-    'hash_source': 'https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/srcrel/arm-gnu-toolchain-src-snapshot-14.2.rel1.tar.xz.sha256asc',
+ARM_SOURCES = {
+    '14.2': {
+        'version': '14.2.rel1',
+        'url': 'https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/srcrel/arm-gnu-toolchain-src-snapshot-14.2.rel1.tar.xz',
+        'sha256': 'e6405f20f8a817a50d92dbf7974d0ee77708dfdf9e79900a59c5d343b464ef9c',
+        'hash_source': 'https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/srcrel/arm-gnu-toolchain-src-snapshot-14.2.rel1.tar.xz.sha256asc',
+    },
+    '15.2': {
+        'version': '15.2.rel1',
+        'url': 'https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/srcrel/arm-gnu-toolchain-src-snapshot-15.2.rel1.tar.xz',
+        'sha256': '06f4e5792b566a771c300ac6f46c3422e23e34f4e3a5d44a8cb5594ead6fb82e',
+        'hash_source': 'https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/srcrel/arm-gnu-toolchain-src-snapshot-15.2.rel1.tar.xz.sha256asc',
+    },
 }
 
 
@@ -39,21 +48,36 @@ def main():
     project_commit = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
     downloads = work / 'source-downloads'
     downloads.mkdir(exist_ok=True)
-    arm = downloads / ARM_SOURCE['url'].rsplit('/', 1)[1]
+    selection = work / 'bash/evidence/userspace-toolchain-selection.txt'
+    if not selection.is_file():
+        raise SystemExit('Missing userspace toolchain selection evidence')
+    selected = selection.read_text().strip()
+    if selected not in ARM_SOURCES:
+        raise SystemExit(f'Unsupported userspace toolchain selection: {selected}')
+    arm_source = ARM_SOURCES[selected]
+    arm = downloads / arm_source['url'].rsplit('/', 1)[1]
     if not arm.exists():
         partial = arm.with_suffix('.partial')
-        with urllib.request.urlopen(ARM_SOURCE['url'], timeout=120) as response, partial.open('wb') as target:
+        with urllib.request.urlopen(arm_source['url'], timeout=120) as response, partial.open('wb') as target:
             while block := response.read(1024 * 1024):
                 target.write(block)
         partial.rename(arm)
-    if digest(arm) != ARM_SOURCE['sha256']:
+    if digest(arm) != arm_source['sha256']:
         raise ValueError('Arm corresponding-source archive mismatch')
     output.mkdir(parents=True)
     # Materialize any download-cache links so the collection is self-contained.
     shutil.copytree(legal, output / 'buildroot-legal-info', symlinks=False)
     shutil.copy2(arm, output / arm.name)
-    toolchain = work / 'baseline/edge-userspace-output/host/opt/ext-toolchain'
-    for name in ('license.txt', '14.2.rel1-x86_64-arm-none-linux-gnueabihf-manifest.txt'):
+    manifest = f"{arm_source['version']}-x86_64-arm-none-linux-gnueabihf-manifest.txt"
+    toolchain = None
+    for candidate in (work / 'bash/edge-userspace-output/host/opt/ext-toolchain',
+                      work / 'baseline/edge-userspace-output/host/opt/ext-toolchain'):
+        if (candidate / manifest).is_file():
+            toolchain = candidate
+            break
+    if toolchain is None:
+        raise SystemExit(f'Arm toolchain manifest not found: {manifest}')
+    for name in ('license.txt', manifest):
         shutil.copy2(toolchain / name, output / ('arm-' + name))
     sources = {
         'kernel': work / 'next/kernel612/modern-linux',
@@ -92,7 +116,7 @@ def main():
         shutil.copy2(path, config / name)
     report = {'status': 'SOFTWARE SOURCE MATERIALS COLLECTED; NOT BINARY RELEASE CLEARANCE',
               'project_commit': project_commit,
-              'source_revisions': revisions, 'arm_sources': ARM_SOURCE,
+              'source_revisions': revisions, 'arm_sources': arm_source,
               'remaining': ['Review the actual target runtime license inventory',
                             'Collect/reconcile vendor BOOT.BIN, FSBL and FPGA corresponding sources/notices',
                             'Qualify the exact SD artifact on hardware'],

@@ -14,7 +14,7 @@
   },
   "userspace": {
     "buildroot": "2026.08",
-    "compiler": "Arm GNU 14.2.rel1",
+    "compiler": "Arm GNU 15.2.rel1",
     "profile": "iq24-bash",
     "source_lock": "modernization.lock.json"
   },

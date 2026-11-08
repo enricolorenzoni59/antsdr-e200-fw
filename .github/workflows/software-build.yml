@@ -11,6 +11,8 @@ jobs:
     # Requires an explicitly provisioned Linux x86-64 builder with >=70 GiB free.
     runs-on: [self-hosted, linux, x64, e200-build]
     timeout-minutes: 360
+    env:
+      E200_USERSPACE_TOOLCHAIN: '15.2'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Build selected candidate from public sources
