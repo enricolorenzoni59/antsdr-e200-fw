@@ -45,6 +45,7 @@ container() {
     while [[ $1 != -- ]]; do options+=("$1"); shift; done
     shift
     "${docker[@]}" run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e E200_JOBS="$jobs" \
+        -e E200_USERSPACE_TOOLCHAIN="${E200_USERSPACE_TOOLCHAIN:-15.2}" \
         -v "$project:/project:ro" "${options[@]}" "$image" "$@"
 }
 if step fetch; then

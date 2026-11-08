@@ -51,7 +51,7 @@ def main():
     for name, payload in data.items():
         (a.output / name).write_bytes(payload)
     manifest = {'status': 'BUILT; HARDWARE UNTESTED', 'hardware_validated': False,
-                'profile': 'E200 single RX; Linux 6.12.111; BR2026.08 SDK14 Bash; iiod1; I16/Q16',
+                'profile': 'E200 single RX; Linux 6.12.115; BR2026.08.1 SDK14 Bash; iiod1; I16/Q16',
                 'artifacts': {name: {'sha256': ram.sha(payload), 'bytes': len(payload)}
                               for name, payload in data.items()}}
     (a.output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')

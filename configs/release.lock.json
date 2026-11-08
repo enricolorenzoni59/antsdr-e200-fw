@@ -6,15 +6,15 @@
   "runtime_layout": "native-libiio-1",
   "hardware_qualification": "single RX 24 MS/s, local tests, client recovery and warm boot verified; physical cold boot pending; new-SSH RX overflow remains",
   "kernel": {
-    "version": "6.12.111",
+    "version": "6.12.115",
     "compiler": "GCC 15",
     "source_lock": "modernization.lock.json",
     "patch_series": "patches/linux/series",
     "rx_patch": "patches/experimental/0001-iio-page-backed-rx.patch"
   },
   "userspace": {
-    "buildroot": "2026.08",
-    "compiler": "Arm GNU 14.2.rel1",
+    "buildroot": "2026.08.1",
+    "compiler": "Arm GNU 15.2.rel1",
     "profile": "iq24-bash",
     "source_lock": "modernization.lock.json"
   },

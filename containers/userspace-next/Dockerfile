@@ -1,4 +1,4 @@
-# Preserve the recorded builder; Buildroot 2026.08 rejects this Ubuntu
+# Preserve the recorded builder; Buildroot 2026.08.1 rejects this Ubuntu
 # snapshot's uutils install implementation. Select its installed GNU binary.
 ARG BASE_IMAGE=sha256:6b92a46a2581e2fcab967983ec4160c42607d3c04c4759bf63a45212a5c7b351
 FROM ${BASE_IMAGE}
