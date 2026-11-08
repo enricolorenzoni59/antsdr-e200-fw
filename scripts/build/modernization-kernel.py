@@ -37,7 +37,7 @@ def fetch(n):
 
 
 with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-    patches = list(pool.map(fetch, range(77, 111)))
+    patches = list(pool.map(fetch, range(77, 115)))
 (root / 'downloads.json').write_text(json.dumps(patches, indent=2) + '\n')
 source = root / 'modern-linux'
 if not source.exists():
@@ -87,7 +87,9 @@ for n, entry in enumerate(patches, 77):
             result = subprocess.run(['git', 'merge-file', '-p', str(ours), *map(str, versions)], capture_output=True)
             scratch.write_bytes(result.stdout)
             if result.returncode:
-                raise SystemExit(f'Conflict requires review: {scratch}')
+                source_hash = hashlib.sha256((source / path).read_bytes()).hexdigest()
+                raise SystemExit(
+                    f'Conflict requires review: {scratch} (source sha256 {source_hash})')
             merged[path] = result.stdout
             excludes.append('--exclude=' + path)
         subprocess.run(['git', '-C', str(source), 'apply', '--check', *excludes, entry['patch']], check=True)
